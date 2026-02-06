@@ -44,3 +44,6 @@ tmpclaude-*
 # Logs
 *.log
 forge_orchestrator.log
+
+# Security audit reports (contain pre-refactor vulnerability details)
+SECURITY-AUDIT-REPORT.md

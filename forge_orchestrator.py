@@ -31,6 +31,7 @@ Usage:
     python forge_orchestrator.py --setup-repos-project 21
     python forge_orchestrator.py --task 63 --dry-run
     python forge_orchestrator.py --task 63 --model opus --max-turns 50
+    python forge_orchestrator.py --cost-report
 
 Copyright 2026 TheForge, LLC
 """
@@ -308,6 +309,56 @@ def _handle_add_project(name, project_dir):
     print(f"\nProject '{name}' registered successfully.")
     print(f"  ID: {project_id}")
     print(f"  Dir: {project_dir}")
+
+
+def _handle_cost_report():
+    """Print agent cost summary from agent_runs table."""
+    if not THEFORGE_DB.exists():
+        print(f"ERROR: Database not found at {THEFORGE_DB}")
+        sys.exit(1)
+
+    conn = sqlite3.connect(str(THEFORGE_DB))
+    conn.row_factory = sqlite3.Row
+
+    # Cost by project
+    rows = conn.execute(
+        "SELECT * FROM v_cost_by_project"
+    ).fetchall()
+
+    if rows:
+        print("\n=== Cost by Project ===\n")
+        print(f"  {'Project':<20} {'Runs':>6} {'Turns':>7} {'Duration':>10} {'Cost ($)':>10} {'Pass':>5} {'Fail':>5}")
+        print(f"  {'-'*20} {'-'*6} {'-'*7} {'-'*10} {'-'*10} {'-'*5} {'-'*5}")
+        total_cost = 0
+        for r in rows:
+            cost = r["total_cost_usd"] or 0
+            total_cost += cost
+            dur = r["total_duration_s"] or 0
+            mins = dur / 60
+            print(f"  {r['codename'] or '?':<20} {r['total_runs'] or 0:>6} "
+                  f"{r['total_turns'] or 0:>7} {mins:>9.1f}m "
+                  f"{cost:>10.4f} {r['successful_runs'] or 0:>5} {r['failed_runs'] or 0:>5}")
+        print(f"\n  {'TOTAL':<20} {'':>6} {'':>7} {'':>10} {total_cost:>10.4f}")
+    else:
+        print("\nNo agent runs recorded yet.")
+
+    # Cost by role
+    rows = conn.execute(
+        "SELECT * FROM v_cost_by_role"
+    ).fetchall()
+
+    if rows:
+        print("\n=== Cost by Role ===\n")
+        print(f"  {'Role':<20} {'Runs':>6} {'Turns':>7} {'Avg Cost':>10} {'Total ($)':>10} {'Pass':>5}")
+        print(f"  {'-'*20} {'-'*6} {'-'*7} {'-'*10} {'-'*10} {'-'*5}")
+        for r in rows:
+            print(f"  {r['role']:<20} {r['total_runs'] or 0:>6} "
+                  f"{r['total_turns'] or 0:>7} "
+                  f"{r['avg_cost_per_run'] or 0:>10.4f} "
+                  f"{r['total_cost_usd'] or 0:>10.4f} {r['successful_runs'] or 0:>5}")
+
+    print()
+    conn.close()
 
 
 # Apply config and discover roles at module load time
@@ -2834,6 +2885,8 @@ async def async_main():
                         help="Auto-scan projects and dispatch work by priority")
     group.add_argument("--add-project", type=str, metavar="NAME",
                         help="Register a new project in Itzamna DB and config")
+    group.add_argument("--cost-report", action="store_true",
+                        help="Show agent cost summary by project and role")
 
     parser.add_argument("--project-dir", type=str, metavar="PATH",
                         help="Project directory (used with --add-project)")
@@ -2873,6 +2926,11 @@ async def async_main():
         if not args.project_dir:
             parser.error("--add-project requires --project-dir <path>")
         _handle_add_project(args.add_project, args.project_dir)
+        return
+
+    # --- Cost report mode ---
+    if args.cost_report:
+        _handle_cost_report()
         return
 
     # --- Setup repos mode (Phase 4B) ---

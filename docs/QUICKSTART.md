@@ -12,11 +12,11 @@ Before running the installer, make sure you have:
 |------|----------------|---------|
 | Python | 3.10+ | [python.org](https://www.python.org/downloads/) |
 | git | 2.40+ | [git-scm.com](https://git-scm.com/) |
-| gh (GitHub CLI) | 2.0+ | [cli.github.com](https://cli.github.com/) |
 | Claude Code CLI | Latest | `npm install -g @anthropic-ai/claude-code` |
 | uvx / uv | Latest | `pip install uv` or [docs.astral.sh](https://docs.astral.sh/uv/) |
+| gh (GitHub CLI) | 2.0+ | [cli.github.com](https://cli.github.com/) *(optional — only for `--setup-repos`)* |
 
-You also need a Claude Max subscription or Anthropic API key.
+You also need a Claude Pro/Max subscription or Anthropic API key.
 
 ---
 
@@ -29,7 +29,7 @@ python itzamna_setup.py
 The wizard will:
 1. Check all prerequisites
 2. Ask where to install ForgeTeam
-3. Create a fresh database with the full schema
+3. Create a fresh database with the full schema (20 tables, 7 views)
 4. Copy orchestrator, prompts, and security skills
 5. Generate `forge_config.json` and `mcp_config.json`
 6. Generate `.mcp.json` (Claude Code MCP integration)
