@@ -1,0 +1,24 @@
+{
+    "max_concurrent": 3,
+    "model": "sonnet",
+    "goals": [
+        {
+            "goal": "Add a --version flag that prints the version from pyproject.toml",
+            "project_id": 1,
+            "comment": "Simple feature — fast to implement and test"
+        },
+        {
+            "goal": "Write unit tests for the authentication module",
+            "project_id": 2,
+            "model": "sonnet",
+            "comment": "Tester-heavy goal — Planner will create test tasks"
+        },
+        {
+            "goal": "Refactor the database layer to use connection pooling",
+            "project_id": 3,
+            "model": "opus",
+            "max_turns": 40,
+            "comment": "Complex refactor — use a more capable model with more turns"
+        }
+    ]
+}

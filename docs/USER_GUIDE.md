@@ -259,6 +259,16 @@ python forge_orchestrator.py --setup-repos -y
 python forge_orchestrator.py --setup-repos-project 1 -y
 ```
 
+### Cost Report Mode
+
+View agent cost summary across all projects and roles.
+
+```bash
+python forge_orchestrator.py --cost-report
+```
+
+Shows two tables: cost per project (runs, turns, duration, cost, pass/fail) and cost per role (runs, average cost, total cost).
+
 ### Common Options
 
 | Option | Default | Description |
@@ -275,13 +285,15 @@ python forge_orchestrator.py --setup-repos-project 1 -y
 
 ### Built-in Roles
 
-| Role | File | Job | Access |
-|------|------|-----|--------|
-| Developer | `developer.md` | Write code, fix bugs, implement features | Read/Write/Edit/Bash + MCP |
-| Tester | `tester.md` | Run tests, report failures (read-only) | Read/Bash + MCP |
-| Planner | `planner.md` | Break goals into 2-8 ordered tasks | Read/Bash (read-only) + MCP |
-| Evaluator | `evaluator.md` | Verify goal completion, create follow-ups | Read/Bash (read-only) + MCP |
-| SecurityReviewer | `security-reviewer.md` | 4-phase code security review | Read/Bash + MCP + Skills |
+| Role | File | Job | File Access | Bash Access | DB Access |
+|------|------|-----|-------------|-------------|-----------|
+| Developer | `developer.md` | Write code, fix bugs, implement features | Read/Write/Edit | Build tools, git | Read + Write |
+| Tester | `tester.md` | Run tests, report failures | Read only | Test runners only | Read only |
+| Planner | `planner.md` | Break goals into 2-8 ordered tasks | Read only | Explore only (ls, git log) | Read + Write (tasks) |
+| Evaluator | `evaluator.md` | Verify goal completion, create follow-ups | Read only | Explore only | Read + Write (tasks) |
+| SecurityReviewer | `security-reviewer.md` | 4-phase code security review | Read only | Scanning tools only | Read only |
+
+All roles use `--permission-mode dontAsk` with explicit `--allowedTools` and `--disallowedTools` flags. Permission overrides are configurable per-role in `forge_config.json` via the `role_permissions` key.
 
 ### Shared Rules (`_common.md`)
 
@@ -384,7 +396,7 @@ If this command starts without error, MCP is working.
 
 ## Database Structure
 
-The database has 19 tables organized into these groups:
+The database has 20 tables organized into these groups:
 
 ### Core Tables
 
@@ -429,6 +441,7 @@ The database has 19 tables organized into these groups:
 |-------|---------|
 | `cross_references` | Links between any two records |
 | `reminders` | Scheduled reminders |
+| `agent_runs` | Agent execution log (role, model, cost, duration, outcome) |
 
 ### Views
 
@@ -439,6 +452,8 @@ The database has 19 tables organized into these groups:
 | `v_stale_questions` | Unresolved questions older than 7 days |
 | `v_upcoming_reminders` | Reminders due within 7 days |
 | `v_content_alerts` | Content inventory below threshold |
+| `v_cost_by_project` | Total agent cost per project |
+| `v_cost_by_role` | Total agent cost per role |
 
 ---
 
