@@ -29,8 +29,11 @@ ForgeTeam turns Claude Code into a team. Instead of one AI doing everything, you
 - **Auto security reviews.** After every successful dev-test loop, an optional Security Reviewer agent audits the code using ClaudeStick tools and checks for zero-day vulnerabilities.
 - **Auto dependency install.** Detects `pyproject.toml` or `package.json` and installs dependencies before the first agent spawns. No more wasting turns on `pip install`.
 - **Per-role turn limits.** Developers get 50 turns, Testers get 20, Security Reviewers get 40. Configurable in `dispatch_config.json`. Agents use their budget where it matters.
+- **Checkpoint/Resume.** When an agent times out or hits its turn limit, ForgeTeam saves its progress. Next run of that task automatically picks up where it left off — no wasted work.
+- **Adaptive complexity.** Tag tasks as `simple`, `medium`, `complex`, or `epic` and ForgeTeam adjusts turn limits automatically (0.5x to 2x). No tag? It infers complexity from the task description.
+- **Model tiering.** Use Haiku for testers, Sonnet for developers, Opus for epic tasks. Per-role and per-complexity model overrides in one config file.
 - **Zero dependencies.** Pure Python stdlib. No pip, no npm, no Docker. Just Python + Claude Code + a SQLite database.
-- **Security by default.** Role-based permission tiers — Testers can't edit files, Planners can't run builds, Security Reviewers can't write to the database. Prompt injection defenses built in.
+- **Security by default.** Prompt injection defenses, safe git staging (`git add -u`), and strict MCP config isolation. Agents use the orchestrator's MCP config only.
 
 ## Quick Start
 
@@ -171,26 +174,13 @@ python forge_orchestrator.py --auto-run -y
 
 ## Security Model
 
-ForgeTeam uses **tiered role-based permissions** instead of blanket access:
+ForgeTeam takes a defense-in-depth approach:
 
-- **`--permission-mode dontAsk`** — auto-denies tools unless explicitly whitelisted
-- **`--allowedTools`** — each role gets only the tools it needs
-- **`--disallowedTools`** — dangerous tools removed from agent context entirely
+- **`--permission-mode bypassPermissions`** — agents run in a controlled sandbox with orchestrator-managed tool access
 - **Prompt injection defense** — database content is sanitized before injection into prompts (XML tag escaping, injection pattern filtering)
 - **Safe git staging** — `git add -u` instead of `git add .` to prevent accidental secret exposure
 - **Strict MCP config** — agents use the orchestrator's MCP config only, ignoring project-level overrides
-
-Permission overrides are configurable per-role in `forge_config.json`:
-```json
-{
-    "role_permissions": {
-        "developer": {
-            "extra_allowed_tools": ["Bash(make *)"],
-            "extra_disallowed_tools": []
-        }
-    }
-}
-```
+- **Orchestrator-managed status** — agents can't mark their own tasks done; the orchestrator decides based on test outcomes
 
 ## Cost Tracking
 
@@ -241,11 +231,54 @@ Agents access the database through [MCP](https://modelcontextprotocol.io/) (Mode
     "max_turns_tester": 20,
     "max_turns_security_reviewer": 40,
     "max_tasks_per_project": 5,
-    "security_review": true
+    "security_review": true,
+    "model_tester": "haiku",
+    "model_epic": "opus"
 }
 ```
 
-Per-role turn limits let you give developers more room for complex tasks while keeping testers lean. The `security_review` flag automatically runs a security audit after every successful dev-test loop.
+**Per-role turn limits** let you give developers more room for complex tasks while keeping testers lean. The `security_review` flag automatically runs a security audit after every successful dev-test loop.
+
+**Model tiering** lets you assign different models per role or per task complexity. Keys follow the pattern `model_{role}` or `model_{complexity}`:
+
+| Key | Effect |
+|-----|--------|
+| `model_developer` | Model for Developer agents |
+| `model_tester` | Model for Tester agents (default: `haiku`) |
+| `model_security_reviewer` | Model for Security Review agents |
+| `model_simple` | Model for simple-complexity tasks |
+| `model_complex` | Model for complex-complexity tasks |
+| `model_epic` | Model for epic-complexity tasks (default: `opus`) |
+
+Priority: complexity model > role model > CLI `--model` > global `model`.
+
+## Checkpoint/Resume
+
+When an agent times out or hits its turn limit, ForgeTeam saves its output to `.forge-checkpoints/`. The next time you run that task, the orchestrator automatically loads the checkpoint and tells the agent to continue where the previous attempt left off.
+
+```
+  [Checkpoint] Loaded checkpoint from attempt #1 (4200 chars). Agent will continue from there.
+```
+
+This eliminates the biggest source of wasted work — complex tasks that need more than one agent session to complete. Checkpoints are automatically cleared when a task succeeds.
+
+## Adaptive Complexity
+
+Tasks can have a `complexity` level that adjusts turn limits and model selection:
+
+| Complexity | Turn Multiplier | Example |
+|:----------:|:---------------:|---------|
+| `simple` | 0.5x | Fix a typo, update a config |
+| `medium` | 1.0x | Add a new endpoint, write tests |
+| `complex` | 1.5x | Refactor auth system, add WebSocket support |
+| `epic` | 2.0x | Build an ML pipeline, full-stack feature |
+
+Set complexity explicitly in the database:
+```sql
+UPDATE tasks SET complexity = 'epic' WHERE id = 42;
+```
+
+Or leave it unset — ForgeTeam infers complexity from the task description length. A developer with a base of 50 turns working on an `epic` task gets 100 turns. A tester with a base of 20 turns on a `simple` task gets 10.
 
 ## Documentation
 
