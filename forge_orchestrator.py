@@ -331,7 +331,7 @@ def update_task_status(task_id, outcome, output=None):
     success_outcomes = ("tests_passed", "no_tests")
     new_status = "done" if outcome in success_outcomes else "blocked"
 
-    # Don't downgrade: if agent already marked it done, leave it
+    # Orchestrator is authoritative — always set status based on outcome
     conn = get_db_connection(write=True)
     try:
         row = conn.execute(
@@ -341,13 +341,10 @@ def update_task_status(task_id, outcome, output=None):
             log(f"  [DB] Task {task_id} not found — skipping status update.", output)
             return
         current = row["status"]
-        if current == "done":
-            log(f"  [DB] Task {task_id} already done — no change needed.", output)
-            return
 
         conn.execute(
-            "UPDATE tasks SET status = ? WHERE id = ?",
-            (new_status, task_id),
+            "UPDATE tasks SET status = ?, completed_at = CASE WHEN ? = 'done' THEN datetime('now') ELSE completed_at END WHERE id = ?",
+            (new_status, new_status, task_id),
         )
         conn.commit()
         log(f"  [DB] Task {task_id}: {current} -> {new_status} (outcome: {outcome})", output)
@@ -1249,6 +1246,13 @@ async def run_dev_test_loop(task, project_dir, project_context, args, output=Non
     total_cost = 0.0
     total_duration = 0.0
     task_id = task["id"]
+
+    # Reset status so orchestrator is authoritative
+    conn = get_db_connection(write=True)
+    conn.execute("UPDATE tasks SET status = 'in_progress' WHERE id = ?", (task_id,))
+    conn.commit()
+    conn.close()
+    log(f"  [Setup] Task {task_id} status reset to in_progress (orchestrator manages lifecycle)", output)
 
     # Resolve model and turns using adaptive tiering
     complexity = get_task_complexity(task)
