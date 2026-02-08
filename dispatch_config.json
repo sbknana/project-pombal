@@ -2,8 +2,13 @@
     "max_concurrent": 4,
     "model": "sonnet",
     "max_turns": 25,
+    "max_turns_developer": 50,
+    "max_turns_tester": 20,
+    "max_turns_security_reviewer": 40,
     "max_tasks_per_project": 5,
     "skip_projects": [],
     "priority_boost": {},
-    "only_projects": []
+    "only_projects": [],
+    "security_review": true,
+    "security_review_tools": "all"
 }
