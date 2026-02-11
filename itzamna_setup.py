@@ -194,10 +194,7 @@ def step_install_path():
     """Prompt user for the installation directory."""
     print_header("Step 2: Install Path")
 
-    if platform.system() == "Windows":
-        default_base = str(Path.home() / "ForgeTeam")
-    else:
-        default_base = str(Path.home() / "ForgeTeam")
+    default_base = str(Path.home() / "ForgeTeam")
 
     base_dir = prompt_input("Install directory", default=default_base)
     base_path = Path(base_dir).resolve()
@@ -683,7 +680,8 @@ def step_next_steps(base_path, db_path):
     print(f"     Claude now has MCP access to the DB and knows all the commands.")
     print()
     print("  2. Or use the CLI directly:")
-    print(f'     python "{orch}" --add-project "MyProject" --project-dir "C:\\path\\to\\project"')
+    example_path = r"C:\path\to\project" if platform.system() == "Windows" else "/path/to/project"
+    print(f'     python "{orch}" --add-project "MyProject" --project-dir "{example_path}"')
     print()
     print("  3. Create a task (ask Claude, or use direct SQL):")
     print(f"     \"Add a todo task for MyProject: Set up the README\"")

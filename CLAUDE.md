@@ -27,7 +27,7 @@ ForgeTeam is currently hardcoded to one developer's synced storage paths, projec
 
 - Installer is a Python script (same language as ForgeTeam, no additional dependencies)
 - All configuration stored in `forge_config.json`
-- `forge_orchestrator.py` refactored with `load_config()` to read config at startup (falls back to hardcoded paths if no config file)
+- `forge_orchestrator.py` refactored with `load_config()` to read `forge_config.json` at startup (required — no hardcoded paths)
 - `_discover_roles()` dynamically scans `prompts/` directory for agent role `.md` files
 - `--add-project` CLI command registers new projects in the DB and config
 - Custom agents: drop a `.md` prompt file in the prompts directory, orchestrator auto-discovers it
@@ -67,7 +67,7 @@ python itzamna_setup.py
 # After installation, from the install directory:
 
 # Add a project
-python forge_orchestrator.py --add-project "MyApp" --project-dir "C:\path\to\myapp"
+python forge_orchestrator.py --add-project "MyApp" --project-dir "/path/to/myapp"
 
 # Run a task
 python forge_orchestrator.py --task 1 --dev-test -y
@@ -91,4 +91,4 @@ The following changes were made to `forge_orchestrator.py` for portability:
 4. **`--add-project`** — CLI command to register new projects in DB + config
 5. **`_handle_add_project()`** — Implementation of the add-project command
 
-All changes are backward compatible. Without `forge_config.json`, the orchestrator uses its original hardcoded values.
+All changes are platform-independent. `forge_config.json` is required — run `itzamna_setup.py` to generate it.
