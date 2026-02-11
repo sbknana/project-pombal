@@ -39,6 +39,7 @@ import argparse
 import asyncio
 import json
 import os
+import platform
 import shutil
 import sqlite3
 import subprocess
@@ -52,7 +53,8 @@ os.environ["PYTHONUNBUFFERED"] = "1"
 
 # --- Constants ---
 
-THEFORGE_DB = Path(r"C:\Users\User\Google Drive\AI_Stuff\TheForge\theforge.db")
+# Default DB path — override via forge_config.json (run itzamna_setup.py to generate)
+THEFORGE_DB = Path(__file__).parent / "theforge.db"
 MCP_CONFIG = Path(__file__).parent / "mcp_config.json"
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 SKILLS_DIR = Path(__file__).parent / "skills" / "security"
@@ -112,27 +114,10 @@ MAX_MANAGER_ROUNDS = 3       # max plan-execute-evaluate rounds
 MAX_TASKS_PER_PLAN = 8       # planner can't create more than this
 MAX_FOLLOWUP_TASKS = 4       # evaluator can't create more than this per round
 
-# Project codenames mapped to their Google Drive directories
-PROJECT_DIRS = {
-    "stampede": r"C:\Users\User\Google Drive\AI_Stuff\usb-duplicator",
-    "folder2flash": r"C:\Users\User\Google Drive\AI_Stuff\USBCopier",
-    "magnetype": r"C:\Users\User\Google Drive\AI_Stuff\TextToSTL-NamepalteWithMagnets",
-    "youtubedownloader": r"C:\Users\User\Google Drive\AI_Stuff\YouTubeDownloader",
-    "cascade pro": r"C:\Users\User\Google Drive\AI_Stuff\CascadePro",
-    "marketeer": r"C:\Users\User\Google Drive\AI_Stuff\marketeer",
-    "arrmada": r"C:\Users\User\Google Drive\AI_Stuff\media-server-setup",
-    "claudestick": r"C:\Users\User\Google Drive\AI_Stuff\claude-portable",
-    "forgemind": r"C:\Users\User\Google Drive\AI_Stuff\TheForge",
-    "codecourier": r"C:\Users\User\Google Drive\AI_Stuff\CodeCourier\CodeCourier",
-    "whydah": r"C:\Users\User\Google Drive\AI_Stuff\Whydah",
-    "wipestation": r"C:\Users\User\Google Drive\AI_Stuff\WipeStation",
-    "fellowshipfirst": r"C:\Users\User\Google Drive\AI_Stuff\FellowshipFirst",
-    "doge-habeus": r"C:\Users\User\Google Drive\AI_Stuff\DOGE-Habeus - POH-POS",
-    "hoverfly": r"C:\Users\User\Google Drive\AI_Stuff\Hoverfly",
-    "forgeteam": r"C:\Users\User\Google Drive\AI_Stuff\ForgeTeam",
-    "forgebridge": r"C:\Users\User\Google Drive\AI_Stuff\ForgeBridge",
-    "localllm-setup": r"C:\Users\User\Google Drive\AI_Stuff\LocalLLM-Setup",
-}
+# Project codenames mapped to their directories.
+# Empty by default — populated from forge_config.json (run itzamna_setup.py first,
+# then use --add-project to register projects).
+PROJECT_DIRS = {}
 
 # For sorting text-based priority values
 PRIORITY_ORDER = {
@@ -143,7 +128,7 @@ PRIORITY_ORDER = {
 }
 
 # Default GitHub owner for --setup-repos
-GITHUB_OWNER = "SBKNana"
+GITHUB_OWNER = ""
 
 
 # --- Portable Configuration ---
@@ -2357,14 +2342,22 @@ def _get_repo_env():
     """Build an environment dict with git and gh on the PATH."""
     env = os.environ.copy()
     extra_paths = []
-    for candidate in [
-        r"C:\Program Files\Git\cmd",
-        r"C:\Program Files\GitHub CLI",
-    ]:
+    sep = ";" if platform.system() == "Windows" else ":"
+    if platform.system() == "Windows":
+        candidates = [
+            r"C:\Program Files\Git\cmd",
+            r"C:\Program Files\GitHub CLI",
+        ]
+    else:
+        candidates = [
+            "/usr/local/bin",
+            str(Path.home() / ".local" / "bin"),
+        ]
+    for candidate in candidates:
         if os.path.isdir(candidate) and candidate not in env.get("PATH", ""):
             extra_paths.append(candidate)
     if extra_paths:
-        env["PATH"] = ";".join(extra_paths) + ";" + env.get("PATH", "")
+        env["PATH"] = sep.join(extra_paths) + sep + env.get("PATH", "")
     return env
 
 
