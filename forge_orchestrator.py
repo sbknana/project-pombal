@@ -39,6 +39,7 @@ import argparse
 import asyncio
 import json
 import os
+import platform
 import shutil
 import sqlite3
 import subprocess
@@ -52,7 +53,8 @@ os.environ["PYTHONUNBUFFERED"] = "1"
 
 # --- Constants ---
 
-THEFORGE_DB = Path(r"TheForge\theforge.db")
+# Default DB path — override via forge_config.json (run itzamna_setup.py to generate)
+THEFORGE_DB = Path(__file__).parent / "theforge.db"
 MCP_CONFIG = Path(__file__).parent / "mcp_config.json"
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 SKILLS_DIR = Path(__file__).parent / "skills" / "security"
@@ -112,27 +114,10 @@ MAX_MANAGER_ROUNDS = 3       # max plan-execute-evaluate rounds
 MAX_TASKS_PER_PLAN = 8       # planner can't create more than this
 MAX_FOLLOWUP_TASKS = 4       # evaluator can't create more than this per round
 
-# Project codenames mapped to their synced storage directories
-PROJECT_DIRS = {
-    "stampede": r"usb-duplicator",
-    "folder2flash": r"USBCopier",
-    "magnetype": r"TextToSTL-NamepalteWithMagnets",
-    "youtubedownloader": r"YouTubeDownloader",
-    "cascade pro": r"CascadePro",
-    "marketeer": r"marketeer",
-    "arrmada": r"media-server-setup",
-    "claudestick": r"claude-portable",
-    "forgemind": r"TheForge",
-    "codecourier": r"CodeCourier\CodeCourier",
-    "whydah": r"Whydah",
-    "wipestation": r"WipeStation",
-    "fellowshipfirst": r"FellowshipFirst",
-    "chain-node": r"BlockNet - POH-POS",
-    "hoverfly": r"Hoverfly",
-    "forgeteam": r"ForgeTeam",
-    "forgebridge": r"ForgeBridge",
-    "localllm-setup": r"LocalLLM-Setup",
-}
+# Project codenames mapped to their directories.
+# Empty by default — populated from forge_config.json (run itzamna_setup.py first,
+# then use --add-project to register projects).
+PROJECT_DIRS = {}
 
 # For sorting text-based priority values
 PRIORITY_ORDER = {
@@ -143,7 +128,7 @@ PRIORITY_ORDER = {
 }
 
 # Default GitHub owner for --setup-repos
-GITHUB_OWNER = "[OWNER]"
+GITHUB_OWNER = ""
 
 
 # --- Portable Configuration ---
@@ -2357,14 +2342,22 @@ def _get_repo_env():
     """Build an environment dict with git and gh on the PATH."""
     env = os.environ.copy()
     extra_paths = []
-    for candidate in [
-        r"C:\Program Files\Git\cmd",
-        r"C:\Program Files\GitHub CLI",
-    ]:
+    sep = ";" if platform.system() == "Windows" else ":"
+    if platform.system() == "Windows":
+        candidates = [
+            r"C:\Program Files\Git\cmd",
+            r"C:\Program Files\GitHub CLI",
+        ]
+    else:
+        candidates = [
+            "/usr/local/bin",
+            str(Path.home() / ".local" / "bin"),
+        ]
+    for candidate in candidates:
         if os.path.isdir(candidate) and candidate not in env.get("PATH", ""):
             extra_paths.append(candidate)
     if extra_paths:
-        env["PATH"] = ";".join(extra_paths) + ";" + env.get("PATH", "")
+        env["PATH"] = sep.join(extra_paths) + sep + env.get("PATH", "")
     return env
 
 
