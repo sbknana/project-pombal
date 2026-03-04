@@ -1,8 +1,8 @@
-# API.md — Itzamna / ForgeTeam
+# API.md — Project Pombal
 
 ## Table of Contents
 
-- [API.md — Itzamna / ForgeTeam](#apimd-itzamna-forgeteam)
+- [API.md — Project Pombal](#apimd-project-pombal)
   - [Overview](#overview)
   - [Architecture](#architecture)
   - [CLI Entry Points](#cli-entry-points)
@@ -36,7 +36,7 @@
     - [db_migrate.py](#db_migratepy)
 - [Run all pending migrations](#run-all-pending-migrations)
 - [Silent mode](#silent-mode)
-    - [itzamna_setup.py](#itzamna_setuppy)
+    - [pombal_setup.py](#pombal_setuppy)
   - [Internal Python APIs](#internal-python-apis)
     - [Database Connection](#database-connection)
 - [forge_orchestrator.py](#forge_orchestratorpy)
@@ -66,16 +66,16 @@
 
 ## Overview
 
-**ForgeTeam** is a multi-agent AI orchestration platform for Claude Code. It is **not a web API service** — it is a collection of CLI tools, orchestration scripts, and SQLite-backed utilities that coordinate AI agents for software development tasks.
+**Project Pombal** is a multi-agent AI orchestration platform for Claude Code. It is **not a web API service** — it is a collection of CLI tools, orchestration scripts, and SQLite-backed utilities that coordinate AI agents for software development tasks.
 
-There are **no HTTP/REST API endpoints, GraphQL schemas, or tRPC procedures** detected in this project. ForgeTeam operates through:
+There are **no HTTP/REST API endpoints, GraphQL schemas, or tRPC procedures** detected in this project. Project Pombal operates through:
 
 - **CLI entry points** (Python scripts invoked from the command line)
 - **SQLite database** for persistent state, episodes, lessons, and agent messages
 - **Inter-agent messaging** via database-backed message passing
 - **Ollama integration** for local LLM inference (HTTP client, not server)
 
-This document describes the **internal programmatic interfaces** — the key function-level APIs that developers integrating with or extending ForgeTeam will use.
+This document describes the **internal programmatic interfaces** — the key function-level APIs that developers integrating with or extending Project Pombal will use.
 
 ---
 
@@ -264,12 +264,12 @@ python db_migrate.py --silent
 
 ---
 
-### itzamna_setup.py
+### pombal_setup.py
 
 Guided interactive setup wizard.
 
 ```bash
-python itzamna_setup.py
+python pombal_setup.py
 ```
 
 ---

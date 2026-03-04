@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Forge Arena — Iterative Agent Training Loop for LoRA Data Generation.
 
-Runs ForgeTeam agents through repeated improvement cycles on a project,
+Runs Project Pombal agents through repeated improvement cycles on a project,
 generating high-quality training episodes for LoRA fine-tuning.
 
 Each phase runs a full role rotation:
@@ -34,7 +34,7 @@ Usage:
     # Run DOGE-HABEAS Go blockchain rewrite
     python3 forge_arena.py --project doge-habeas
 
-    # Run Itzamna Python rewrite
+    # Run Project Pombal Python rewrite
     python3 forge_arena.py --project itzamna
 
 Copyright 2026 Forgeborn
@@ -1194,7 +1194,7 @@ ITZAMNA_PHASES = [
     {
         "id": 1,
         "name": "Foundation — CLI Framework, Config, Package Detection",
-        "developer_task": """Rewrite the Itzamna portable installer foundation using Python best practices.
+        "developer_task": """Rewrite the Project Pombal portable installer foundation using Python best practices.
 
 **Requirements:**
 1. Modern Python CLI using `click` (not argparse)
@@ -1219,17 +1219,17 @@ ITZAMNA_PHASES = [
 - Config loads from TOML with validation errors on bad input
 - Works on Windows and Linux
 """,
-        "tester_task": """Write pytest tests for Itzamna foundation.
+        "tester_task": """Write pytest tests for Project Pombal foundation.
 
 **Test:** Config loading/validation, package detection (mocked), CLI help output, Rich formatting.
 Use `pytest --strict-markers -v`. Aim for 90%+ coverage.
 """,
-        "security_task": """Security review Itzamna foundation.
+        "security_task": """Security review Project Pombal foundation.
 
 **Focus:** Config file handling (TOML injection?), subprocess calls for detection (command injection?),
 path traversal in config paths, dependency audit.
 """,
-        "review_task": """Code review Itzamna foundation.
+        "review_task": """Code review Project Pombal foundation.
 
 **Check:** Python idioms, type hints, click best practices, pydantic model design, test quality.
 """,
