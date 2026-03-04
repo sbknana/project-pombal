@@ -1,15 +1,15 @@
-# CLAUDE.md — Itzamna
+# CLAUDE.md — Project Pombal
 
 ## Project Overview
 
 **TheForge project_id:** 23
 **Status:** Active - v2.1 IMPLEMENTED
 
-Itzamna is the portable installer and onboarding system for the ForgeTeam multi-agent orchestration platform. Named after the Mayan god of creation, writing, and knowledge, Itzamna makes ForgeTeam usable by anyone — not just the original developer.
+Project Pombal is the portable installer and onboarding system for the Project Pombal multi-agent orchestration platform. Named after the Marquis of Pombal who rebuilt Lisbon after the 1755 earthquake, Project Pombal makes the agent system usable by anyone — not just the original developer.
 
 **What it does:**
 - Guided setup: prerequisites check, install path selection, DB creation
-- SQLite database creation with the full Itzamna schema (empty, ready to use)
+- SQLite database creation with the full Project Pombal schema (empty, ready to use)
 - MCP server configuration (`mcp_config.json` for agents)
 - Claude Code integration (`.mcp.json` for user sessions + `CLAUDE.md` for context)
 - Config file generation (replacing all hardcoded paths)
@@ -19,19 +19,19 @@ Itzamna is the portable installer and onboarding system for the ForgeTeam multi-
 - Concurrency benchmarks and limits documentation
 
 **Why it exists:**
-ForgeTeam is currently hardcoded to one developer's synced storage paths, project mappings, and DB location. Itzamna extracts all of that into a portable, configurable system that anyone can install and use.
+The orchestrator is currently hardcoded to one developer's synced storage paths, project mappings, and DB location. Project Pombal extracts all of that into a portable, configurable system that anyone can install and use.
 
 ---
 
 ## Key Architecture Decisions
 
-- Installer is a Python script (same language as ForgeTeam, no additional dependencies)
+- Installer is a Python script (same language as Project Pombal, no additional dependencies)
 - All configuration stored in `forge_config.json`
 - `forge_orchestrator.py` refactored with `load_config()` to read `forge_config.json` at startup (required — no hardcoded paths)
 - `_discover_roles()` dynamically scans `prompts/` directory for agent role `.md` files
 - `--add-project` CLI command registers new projects in the DB and config
 - Custom agents: drop a `.md` prompt file in the prompts directory, orchestrator auto-discovers it
-- Itzamna DB schema is the canonical DDL extracted from the live database
+- Project Pombal DB schema is the canonical DDL extracted from the live database
 - MCP server setup handled by installer (generates `mcp_config.json` pointing to user's DB)
 - Claude Code integration: `.mcp.json` gives user sessions MCP access; `CLAUDE.md` provides full context (commands, queries, roles)
 - Stdlib only — no pip dependencies for the installer
@@ -40,7 +40,7 @@ ForgeTeam is currently hardcoded to one developer's synced storage paths, projec
 
 ## Parent Project
 
-Itzamna is the installer/distribution layer for **ForgeTeam** (project_id: 21). ForgeTeam is the orchestration engine; Itzamna makes it installable.
+Project Pombal is the installer/distribution layer for **Project Pombal** (project_id: 21). The orchestrator is the engine; Project Pombal makes it installable.
 
 ---
 
@@ -49,7 +49,7 @@ Itzamna is the installer/distribution layer for **ForgeTeam** (project_id: 21). 
 | File | Purpose |
 |------|---------|
 | `CLAUDE.md` | This file — project context |
-| `itzamna_setup.py` | Interactive setup wizard (9 steps, ~550 lines) |
+| `pombal_setup.py` | Interactive setup wizard (9 steps, ~550 lines) |
 | `forge_orchestrator.py` | Main orchestrator with context engineering |
 | `forgesmith.py` | ForgeSmith self-learning pipeline (nightly cron) |
 | `forgesmith_gepa.py` | GEPA — DSPy-based automatic prompt evolution with A/B testing |
@@ -69,7 +69,7 @@ Itzamna is the installer/distribution layer for **ForgeTeam** (project_id: 21). 
 
 ```bash
 # Run the setup wizard
-python itzamna_setup.py
+python pombal_setup.py
 
 # After installation, from the install directory:
 
@@ -88,7 +88,7 @@ python forge_orchestrator.py --auto-run --dry-run
 
 ---
 
-## Changes Made to ForgeTeam
+## Changes Made to Project Pombal
 
 The following changes were made to `forge_orchestrator.py` for portability:
 
@@ -98,4 +98,4 @@ The following changes were made to `forge_orchestrator.py` for portability:
 4. **`--add-project`** — CLI command to register new projects in DB + config
 5. **`_handle_add_project()`** — Implementation of the add-project command
 
-All changes are platform-independent. `forge_config.json` is required — run `itzamna_setup.py` to generate it.
+All changes are platform-independent. `forge_config.json` is required — run `pombal_setup.py` to generate it.

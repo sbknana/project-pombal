@@ -1,5 +1,5 @@
 """
-ForgeTeam Phase 5: Multi-Project Orchestration with Resource Allocation
+Project Pombal Phase 5: Multi-Project Orchestration with Resource Allocation
 
 Picks a task from TheForge, spawns Developer and Tester agents via claude -p,
 gives them MCP access to TheForge, and iterates until tests pass or max cycles hit.
@@ -270,7 +270,7 @@ def _discover_roles():
 
 
 def _handle_add_project(name, project_dir):
-    """Register a new project in the Itzamna DB and update forge_config.json."""
+    """Register a new project in the Project Pombal DB and update forge_config.json."""
     project_dir = str(Path(project_dir).resolve())
 
     # Insert into DB
@@ -4061,7 +4061,7 @@ def print_manager_summary(goal, outcome, rounds, completed, blocked, cost, durat
     is_success = outcome == "goal_complete"
 
     log("\n" + "#" * 60, output)
-    log("FORGETEAM MANAGER MODE SUMMARY", output)
+    log("PROJECT POMBAL MANAGER MODE SUMMARY", output)
     log("#" * 60, output)
 
     log(f"\nGoal:      {goal[:100]}", output)
@@ -4118,7 +4118,7 @@ def verify_task_updated(task_id):
 def print_summary(task, result, verified, verify_msg):
     """Print a formatted summary of the agent run."""
     print("\n" + "=" * 60)
-    print("FORGETEAM AGENT RUN SUMMARY")
+    print("PROJECT POMBAL AGENT RUN SUMMARY")
     print("=" * 60)
 
     print(f"\nTask:      #{task['id']} - {task['title']}")
@@ -4170,7 +4170,7 @@ def print_dev_test_summary(task, result, cycles, outcome, verified, verify_msg):
     is_success = outcome in ("tests_passed", "no_tests")
 
     print("\n" + "=" * 60)
-    print("FORGETEAM DEV-TEST LOOP SUMMARY")
+    print("PROJECT POMBAL DEV-TEST LOOP SUMMARY")
     print("=" * 60)
 
     print(f"\nTask:      #{task['id']} - {task['title']}")
@@ -4427,7 +4427,7 @@ async def run_parallel_goals(resolved_goals, defaults, args):
 def print_parallel_summary(results):
     """Print a combined summary table for all parallel goals."""
     print(f"\n{'#' * 60}")
-    print("FORGETEAM PARALLEL GOALS SUMMARY")
+    print("PROJECT POMBAL PARALLEL GOALS SUMMARY")
     print(f"{'#' * 60}")
 
     total_cost = 0.0
@@ -4721,7 +4721,7 @@ def scan_pending_work():
     [
         {
             "project_id": 21,
-            "project_name": "ForgeTeam",
+            "project_name": "Project Pombal",
             "codename": "forgeteam",
             "status": "active",
             "tasks": [<task dicts sorted by priority>],
@@ -5329,7 +5329,7 @@ async def run_parallel_tasks(task_ids, args):
 async def async_main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="ForgeTeam: Run AI agents on TheForge tasks"
+        description="Project Pombal: Run AI agents on TheForge tasks"
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--task", type=int, help="Task ID to work on")
@@ -5346,7 +5346,7 @@ async def async_main():
     group.add_argument("--auto-run", action="store_true",
                         help="Auto-scan projects and dispatch work by priority")
     group.add_argument("--add-project", type=str, metavar="NAME",
-                        help="Register a new project in Itzamna DB and config")
+                        help="Register a new project in Project Pombal DB and config")
 
     parser.add_argument("--project-dir", type=str, metavar="PATH",
                         help="Project directory (used with --add-project)")

@@ -1,6 +1,6 @@
-# Fine-Tuning Your Own ForgeTeam Model
+# Fine-Tuning Your Own Project Pombal Model
 
-Train a local LLM that actually knows how to be an agent. Not a generic chatbot — a model fine-tuned on real ForgeTeam task executions using QLoRA.
+Train a local LLM that actually knows how to be an agent. Not a generic chatbot — a model fine-tuned on real Project Pombal task executions using QLoRA.
 
 ## Overview
 
@@ -214,12 +214,12 @@ Then convert:
 # Q4_K_M is a good balance of quality vs size
 python3 llama.cpp/convert_hf_to_gguf.py merged_model \
   --outtype q4_k_m \
-  --outfile forgeteam-9b-q4_k_m.gguf
+  --outfile pombal-9b-q4_k_m.gguf
 
 # Q5_K_M if you have the VRAM and want slightly better quality
 python3 llama.cpp/convert_hf_to_gguf.py merged_model \
   --outtype q5_k_m \
-  --outfile forgeteam-9b-q5_k_m.gguf
+  --outfile pombal-9b-q5_k_m.gguf
 ```
 
 ### GGUF Size Reference
@@ -236,36 +236,36 @@ python3 llama.cpp/convert_hf_to_gguf.py merged_model \
 Create a `Modelfile`:
 
 ```
-FROM ./forgeteam-9b-q4_k_m.gguf
+FROM ./pombal-9b-q4_k_m.gguf
 
 PARAMETER temperature 0.1
 PARAMETER num_predict 4096
 PARAMETER top_p 0.9
 
-SYSTEM You are a ForgeTeam agent. Follow instructions precisely and use tools efficiently. Think step by step. Be concise in your responses.
+SYSTEM You are a Project Pombal agent. Follow instructions precisely and use tools efficiently. Think step by step. Be concise in your responses.
 ```
 
 Low temperature is intentional. Agents need to be consistent and precise, not creative.
 
 ```bash
 # Create the model
-ollama create forgeteam -f Modelfile
+ollama create pombal -f Modelfile
 
 # Quick test
-ollama run forgeteam "Hello, test"
+ollama run pombal "Hello, test"
 
 # Test with an agent-style prompt
-ollama run forgeteam "Review this Python function for bugs: def add(a, b): return a - b"
+ollama run pombal "Review this Python function for bugs: def add(a, b): return a - b"
 ```
 
-## Step 6: Configure ForgeTeam
+## Step 6: Configure Project Pombal
 
 Update `dispatch_config.json` to use your fine-tuned model:
 
 ```json
 {
-    "ollama_model": "forgeteam",
-    "ollama_model_planner": "forgeteam"
+    "ollama_model": "pombal",
+    "ollama_model_planner": "pombal"
 }
 ```
 
@@ -273,12 +273,12 @@ You can also mix models — use the fine-tuned model for specific roles:
 
 ```json
 {
-    "ollama_model": "forgeteam",
+    "ollama_model": "pombal",
     "ollama_model_planner": "qwen3.5:27b",
     "role_overrides": {
-        "code-reviewer": "forgeteam",
-        "developer": "forgeteam",
-        "tester": "forgeteam"
+        "code-reviewer": "pombal",
+        "developer": "pombal",
+        "tester": "pombal"
     }
 }
 ```
@@ -307,13 +307,13 @@ Don't want to train your own? Use the Forgeborn pre-trained model when available
 
 ```bash
 # Via Ollama (easiest)
-ollama pull forgeborn/forgeteam-qwen3.5-9b
+ollama pull forgeborn/pombal-qwen3.5-9b
 
 # Or download the GGUF manually from HuggingFace
-# https://huggingface.co/Forgeborn/forgeteam-qwen3.5-9b
+# https://huggingface.co/Forgeborn/pombal-qwen3.5-9b
 ```
 
-The pre-trained model is fine-tuned on thousands of ForgeTeam task executions across multiple projects. Good starting point even if you plan to fine-tune further on your own data.
+The pre-trained model is fine-tuned on thousands of Project Pombal task executions across multiple projects. Good starting point even if you plan to fine-tune further on your own data.
 
 ---
 

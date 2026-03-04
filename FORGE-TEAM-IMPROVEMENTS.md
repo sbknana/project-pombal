@@ -1,9 +1,9 @@
-# ForgeTeam Improvement Proposals
+# Project Pombal Improvement Proposals
 
 **Author:** Claude Opus 4.6 (after extensive hands-on usage across 2 sessions)
 **Date:** 2026-02-08
 **Updated:** 2026-02-08 — 11 of 16 improvements IMPLEMENTED + 3 new research-driven features
-**Context:** Used ForgeTeam to build CryptoTrader v2 (7 dev tasks, 4 review tasks), ArrMada (6+ tasks), and managed orchestration from a remote Windows PC via SSH to Claudinator.
+**Context:** Used Project Pombal to build CryptoTrader v2 (7 dev tasks, 4 review tasks), ArrMada (6+ tasks), and managed orchestration from a remote Windows PC via SSH to Claudinator.
 
 ### Implementation Status
 | # | Issue | Status |
@@ -32,7 +32,7 @@
 
 ## Executive Summary
 
-ForgeTeam works. It took a project from zero to a full-stack application with 84 files in under 30 minutes of agent time. That said, I ran into enough friction and failure modes that I spent nearly as much time babysitting the orchestrator as it spent coding. Below are concrete issues ranked by impact, with proposed fixes.
+Project Pombal works. It took a project from zero to a full-stack application with 84 files in under 30 minutes of agent time. That said, I ran into enough friction and failure modes that I spent nearly as much time babysitting the orchestrator as it spent coding. Below are concrete issues ranked by impact, with proposed fixes.
 
 ---
 
@@ -230,4 +230,4 @@ ForgeTeam works. It took a project from zero to a full-stack application with 84
 
 ---
 
-*Generated from real-world usage building CryptoTrader v2 and ArrMada projects via ForgeTeam orchestration.*
+*Generated from real-world usage building CryptoTrader v2 and ArrMada projects via Project Pombal orchestration.*

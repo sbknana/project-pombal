@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Itzamna Database Migration System.
+"""Project Pombal Database Migration System.
 
 Detects the current schema version of an existing TheForge database and applies
 incremental migrations to bring it up to the latest version. Backs up the DB
@@ -507,7 +507,7 @@ def main():
         print(f"ERROR: File not found: {db_path}")
         sys.exit(1)
 
-    print(f"Itzamna Database Migration Tool (target: v{CURRENT_VERSION})")
+    print(f"Project Pombal Database Migration Tool (target: v{CURRENT_VERSION})")
     print(f"Database: {db_path}")
     print()
 

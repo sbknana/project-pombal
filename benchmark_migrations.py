@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Itzamna Migration Benchmark — Reproducible Demo
+"""Project Pombal Migration Benchmark — Reproducible Demo
 
 Creates temporary databases at each schema version (v1, v2, v3) with realistic
 sample data, then runs every migration path and verifies zero data loss, backup
@@ -1220,7 +1220,7 @@ def print_report(results):
 
     print()
     print("=" * width)
-    print("  Itzamna Migration Benchmark".center(width))
+    print("  Project Pombal Migration Benchmark".center(width))
     print("=" * width)
     print()
 
@@ -1337,7 +1337,7 @@ def print_report(results):
 def main():
     """Run all migration benchmarks and print the report."""
     print()
-    print("Itzamna Migration Benchmark")
+    print("Project Pombal Migration Benchmark")
     print(f"Target schema version: v{CURRENT_VERSION}")
     print(f"Running from: {Path(__file__).parent}")
     print()
