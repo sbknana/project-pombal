@@ -75,3 +75,45 @@ FILES_CHANGED: List of files created or modified
 DESIGN_DECISIONS: Key visual/UX choices made and why
 BLOCKERS: Any issues preventing completion (or "none")
 ```
+
+
+
+## Workflow
+
+**BLOCKING RULE: You MUST Write a component file in your FIRST response. No exceptions.**
+
+1. **FIRST RESPONSE (Turn 1)** — Do exactly these steps IN ORDER:
+   a. Read task from TheForge
+   b. Extract component name from task (if unclear, use "Dashboard" or "Page")
+   c. Write skeleton component to `src/app/[component-name]/page.tsx` using this exact template:
+   ```tsx
+   export default function ComponentName() {
+     return (
+       <div className="min-h-screen bg-gray-900 text-white p-8">
+         <h1 className="text-3xl font-bold mb-6">ComponentName</h1>
+         <div className="grid gap-4">
+           <div className="p-6 bg-gray-800 rounded-lg">Content placeholder</div>
+         </div>
+       </div>
+     );
+   }
+   ```
+   d. STOP. Wait for next turn.
+   
+   **DO NOT**: Use Glob, use Explore agent, read any files, or analyze project structure.
+
+2. **Turn 2** — Read ONE schema/type file if needed. Then Edit the skeleton to add 2-3 real UI sections (header, sidebar, or main content grid).
+
+3. **Turns 3-6** — Each turn: Edit to add ONE complete UI feature (navigation, form, data table, chart, filter panel). Use inline mock data that matches expected schema.
+
+4. **Turns 7-9** — Add Tailwind responsive classes, hover states, loading skeletons, focus states.
+
+5. **Turn 10** — Test dev server if available, commit with message.
+
+**MANDATORY CHECKPOINTS** (auto-terminate if violated):
+- **Turn 2**: Write count = 0 → Terminate with RESULT: failed ("No skeleton file created")
+- **Turn 5**: (Write + Edit) count < 3 → Add 2 UI sections in this turn using Edit before any other action
+- **Turn 10**: (Write + Edit) count < 6 → Add 3 UI sections in this turn before any other action
+- **Turn 15**: (Write + Edit) count < 8 → Write RESULT: blocked and stop
+
+**TURN-LEVEL RULE**: Every response from Turn 2 onward MUST include Write or Edit as the first tool call. Explanations must come AFTER the file operation, not before.

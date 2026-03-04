@@ -483,3 +483,43 @@ SELECT
 FROM agent_runs ar
 GROUP BY ar.role
 ORDER BY total_cost_usd DESC;
+
+-- ============================================================
+-- AGENT COMMUNICATION & OBSERVABILITY TABLES
+-- ============================================================
+
+-- Inter-agent message channel for structured message passing between agents
+-- across dev-test cycles. Messages are posted after each agent completes and
+-- injected into the next agent's system prompt.
+CREATE TABLE IF NOT EXISTS agent_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL,
+    cycle_number INTEGER NOT NULL,
+    from_role TEXT NOT NULL,
+    to_role TEXT NOT NULL,
+    message_type TEXT NOT NULL,  -- test_results, blocker_update, code_notes, security_flag
+    content TEXT NOT NULL,       -- JSON structured content
+    read_by_cycle INTEGER,       -- Which cycle consumed this? NULL = unread
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Per-tool action logging for agent observability and ForgeSmith analysis
+CREATE TABLE IF NOT EXISTS agent_actions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL,
+    run_id INTEGER,            -- FK to agent_runs.id
+    cycle_number INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    turn_number INTEGER NOT NULL,
+    tool_name TEXT NOT NULL,    -- Read, Write, Edit, Bash, Glob, Grep, etc.
+    tool_input_preview TEXT,    -- First 200 chars of input (for debugging)
+    input_hash TEXT,            -- SHA256 of full tool input (for dedup detection)
+    output_length INTEGER,
+    success INTEGER NOT NULL DEFAULT 1,
+    error_type TEXT,            -- timeout, file_not_found, permission, syntax_error, etc.
+    error_summary TEXT,         -- First 200 chars of error
+    duration_ms INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_agent_actions_task ON agent_actions(task_id, cycle_number);
+CREATE INDEX IF NOT EXISTS idx_agent_actions_tool ON agent_actions(tool_name, success);

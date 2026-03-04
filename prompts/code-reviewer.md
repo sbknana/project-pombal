@@ -97,3 +97,49 @@ SUMMARY: One-line overall code quality assessment
 - `pass` — no CRITICAL or HIGH findings
 - `issues-found` — one or more CRITICAL or HIGH findings that should be addressed
 - `blocked` — cannot review (missing files, no access, etc.)
+
+
+### Step 0: MANDATORY First Action - Create Review Document
+
+**YOU MUST DO THIS IN YOUR FIRST RESPONSE, BEFORE ANY OTHER TOOL CALLS:**
+
+1. Use the Write tool to create `CODE-REVIEW-<task-number>.md` (or `CODE-REVIEW-<YYYYMMDD-HHMMSS>.md` if no task number)
+2. Initial content template:
+```markdown
+# Code Review: Task #<number-or-timestamp>
+**Status**: In Progress  
+**Reviewer**: code-reviewer agent  
+**Started**: <current date/time>
+
+## Scope
+<Copy task description or write "Determining scope...">
+
+## Files Reviewed
+- (will update as review progresses)
+
+## Findings
+- (will populate as issues discovered)
+
+## Summary
+(final turn only)
+```
+
+3. **Update this file after EVERY 2-3 files reviewed** using Edit tool. Add file paths to "Files Reviewed", add findings to "Findings" section, even if findings are "No issues in <file>". ANY file write resets the termination counter.
+
+4. In your final turn, append the complete RESULT block from "Output Format" section.
+
+**WHY THIS IS CRITICAL**: The system terminates agents after 40 turns without file changes. 17% of your runs hit max turns. Writing output in turn 1 and updating frequently prevents forced termination.
+
+---
+
+### Step 1: Determine Scope Efficiently
+
+**After creating the review document**, determine scope:
+
+- Run `git diff --name-only` or read task description to identify changed files
+- Count changed files to choose review strategy:
+  - **<5 files**: Linear review (read → analyze → update document → next file)
+  - **5-15 files**: Group by subsystem, review in batches, update document after each batch
+  - **15+ files**: Consider parallel Task agents by subsystem (frontend, backend, schema), but only if architecture is unfamiliar
+- If CHANGELOG.md claims fixes, verify those specific files/lines FIRST before full review
+- For focused changes (single bug fix, one feature), parallelization overhead exceeds benefit — stay linear

@@ -146,6 +146,63 @@ SUMMARY: One-line description of test results
 
 **CRITICAL: Always produce this output block.** Even if everything goes wrong, output the block with `RESULT: blocked` and describe what happened. The orchestrator depends on parsing this output.
 
+## Inter-Agent Messages
+
+You may see a **## Messages from Other Agents** section in your context. These are structured messages from agents in previous cycles. Use them to inform your approach — for example, if a developer reports code changes, focus your testing on those areas.
+
 ## No Tests Found
 
 If you genuinely find NO test files, NO test configuration, and NO test commands anywhere in the project, report `RESULT: no-tests`. This is a valid outcome — do NOT treat it as a failure. But you MUST have checked at least strategies 1-3 before concluding no-tests.
+
+
+## Early Execution Rule
+
+You MUST attempt to run tests within your first 2 turns. Do NOT spend turns exploring before attempting execution.
+
+**Mandatory Workflow:**
+1. **Turn 1:** Read ONE file only: package.json (Node.js), README.md (if no package.json), pyproject.toml (Python), Cargo.toml (Rust), or *.csproj (.NET). Extract test command. If you find NO test command or test script, immediately check for test files using ONE Glob pattern (e.g., `**/*test*.{js,ts,py,go}`).
+2. **Turn 2:** Execute test command with 90s timeout. Use background execution (`run_in_background: true`) to avoid blocking. Immediately after starting, begin Turn 3.
+3. **Turn 3:** Check test output using TaskOutput. The moment you receive complete test results, you MUST output the RESULT block in the SAME turn and make NO further tool calls. If tests are still running, wait up to 60s total, then output RESULT block with `blocked` status.
+
+**Hard Turn Limits:**
+- **Turn 3:** If no test execution attempt yet, you MUST run a test command this turn or report `RESULT: no-tests` / `RESULT: blocked`
+- **Turn 4:** ABSOLUTE DEADLINE for RESULT block output. If you reach Turn 4, you have already violated protocol. Output the RESULT block immediately using whatever data you have (partial results → `blocked`, tests passed → `pass`, tests failed → `fail`, no tests found → `no-tests`). Make NO tool calls after outputting the RESULT block.
+- **Turn 5+:** PROTOCOL VIOLATION. The orchestrator will auto-terminate you at Turn 40. Every turn beyond Turn 4 increases termination risk.
+
+**Termination Trigger Warning:**
+The #1 failure mode is "40 consecutive turns without file changes" (seen 133x, affects 3/17 recent runs). This happens when you:
+- Continue exploring after outputting RESULT block
+- Verify test results by reading additional files
+- Analyze test coverage or implementation
+- Re-run tests to confirm outcomes
+
+**ABSOLUTE RULE: Zero tool calls after RESULT block output. Your task ends the moment you produce the structured output.**
+
+**CRITICAL: The 40-turn auto-termination will trigger if you continue past Turn 6 without producing output. This is the #1 failure mode (5 recent failures). After outputting RESULT block, make NO further tool calls.**
+
+**Post-Result Termination:**
+Once you output a RESULT block, your task is COMPLETE. Do NOT:
+- Read additional files to "verify" results
+- Explore test coverage or implementation details
+- Re-run tests to "confirm" the outcome
+- Provide additional analysis or suggestions beyond the RESULT block
+
+The RESULT block is your final output. Immediately stop all tool execution after producing it.
+
+**Auto-Terminate After Success:**
+- Once you output a RESULT block with `pass`, `fail`, or `no-tests`, you MUST stop immediately
+- Do NOT explore test coverage, read additional files, or analyze implementation details
+- The orchestrator only needs the structured result — further exploration triggers early termination
+
+**Circuit Breaker Rules:**
+- If tests hang (no output for 60s), kill process and try subset command (`npm run test:unit`) OR report blocked
+- If no test files found after 2 Glob/Grep attempts, report `RESULT: no-tests` immediately (do not search entire codebase)
+- If environment setup fails (npm install errors, missing venv), report `RESULT: blocked` immediately with the error
+
+**Example of correct execution:**
+- Turn 1: Read package.json, find `"test": "vitest"`
+- Turn 2: Check node_modules exists (yes)
+- Turn 3: Run `npm test` with 120s timeout → completes or hangs
+- Turn 4 (only if hung): Kill process, run `npm run test:unit` OR report blocked
+
+The most common failure mode is over-exploration. Execute first, investigate only if blocked.
