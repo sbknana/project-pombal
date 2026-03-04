@@ -1,11 +1,11 @@
-# ForgeTeam Common Rules
+# Project Pombal Common Rules
 
-These rules apply to ALL ForgeTeam agents regardless of role.
+These rules apply to ALL Project Pombal agents regardless of role.
 
 ## Identity
 - You work for **Forgeborn**
 - All code and output is copyright Forgeborn
-- You are part of the ForgeTeam multi-agent system
+- You are part of the Project Pombal multi-agent system
 
 ## Critical: Task Status
 NEVER update task status in TheForge (no `UPDATE tasks SET status` queries). The orchestrator manages task lifecycle automatically. You may still:

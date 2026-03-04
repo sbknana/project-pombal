@@ -1,6 +1,6 @@
 # Prompt Improvements — Before/After Comparison
 
-Generated for Task #199: ForgeTeam Self-Improvement System
+Generated for Task #199: Project Pombal Self-Improvement System
 Date: 2026-02-09
 
 ## Problems Identified

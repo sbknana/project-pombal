@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-ForgeTeam QLoRA Training Script
-================================
-Fine-tunes Qwen3.5 models using Unsloth for ForgeTeam agent improvement.
+Project Pombal QLoRA Training Script
+=====================================
+Fine-tunes Qwen3.5 models using Unsloth for Project Pombal agent improvement.
 
 Usage:
     # Activate env first: source /home/user/qlora-env/bin/activate
@@ -113,7 +113,7 @@ def main():
     }
 
     print("=" * 60)
-    print("ForgeTeam QLoRA Training")
+    print("Project Pombal QLoRA Training")
     print("=" * 60)
     print(f"\nModel: {model_name}")
     print(f"LoRA rank: {config['lora_r']}, alpha: {config['lora_alpha']}")
@@ -289,7 +289,7 @@ def main():
     print("\nAll done! Next steps:")
     print("  1. Test adapter: model.generate() on sample prompts")
     print("  2. Deploy to Ollama: ollama create forgetuned-{model} -f Modelfile")
-    print("  3. Update ForgeTeam dispatch_config.json with new model name")
+    print("  3. Update Project Pombal dispatch_config.json with new model name")
 
 
 if __name__ == "__main__":

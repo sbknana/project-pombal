@@ -1,8 +1,8 @@
-# Contributing to Itzamna (ForgeTeam)
+# Contributing to Project Pombal
 
 ## Table of Contents
 
-- [Contributing to Itzamna (ForgeTeam)](#contributing-to-itzamna-forgeteam)
+- [Contributing to Project Pombal](#contributing-to-project-pombal)
   - [Welcome](#welcome)
   - [Development Setup](#development-setup)
     - [Prerequisites](#prerequisites)
@@ -37,7 +37,7 @@
 
 ## Welcome
 
-Thank you for your interest in contributing to Itzamna! Whether you're fixing a bug, improving documentation, adding a new feature, or enhancing the multi-agent orchestration system, your contribution is valued. ForgeTeam is a community-driven project, and we're glad you're here.
+Thank you for your interest in contributing to Project Pombal! Whether you're fixing a bug, improving documentation, adding a new feature, or enhancing the multi-agent orchestration system, your contribution is valued. Project Pombal is a community-driven project, and we're glad you're here.
 
 This guide will help you get set up and contributing effectively.
 
@@ -47,7 +47,7 @@ This guide will help you get set up and contributing effectively.
 
 ### Prerequisites
 
-Itzamna requires the following tools. The setup wizard (`itzamna_setup.py`) will verify most of these for you:
+Project Pombal requires the following tools. The setup wizard (`pombal_setup.py`) will verify most of these for you:
 
 - **Python 3.10+**
 - **SQLite3** (ships with Python, but the CLI tool is useful for debugging)
@@ -59,14 +59,14 @@ Itzamna requires the following tools. The setup wizard (`itzamna_setup.py`) will
 1. **Fork and clone the repository:**
 
    ```bash
-   git clone https://github.com/<your-username>/itzamna.git
-   cd itzamna
+   git clone https://github.com/<your-username>/pombal.git
+   cd pombal
    ```
 
 2. **Run the setup wizard** to initialize the database and configuration:
 
    ```bash
-   python itzamna_setup.py
+   python pombal_setup.py
    ```
 
    This will walk you through prerequisites checks, install path selection, database creation, config generation, and optional components (Sentinel, ForgeBot).
@@ -89,7 +89,7 @@ Itzamna requires the following tools. The setup wizard (`itzamna_setup.py`) will
 
 | Path | Purpose |
 |------|---------|
-| `forge_orchestrator.py` | Core multi-agent orchestrator — the heart of ForgeTeam |
+| `forge_orchestrator.py` | Core multi-agent orchestrator — the heart of Project Pombal |
 | `forgesmith.py` | Self-improvement engine: analysis, lessons, rubric scoring |
 | `forgesmith_simba.py` | SIMBA rule generation from high-variance episodes |
 | `forgesmith_gepa.py` | Genetic-evolutionary prompt optimization (GEPA) |
@@ -98,7 +98,7 @@ Itzamna requires the following tools. The setup wizard (`itzamna_setup.py`) will
 | `forge_dashboard.py` | Performance dashboard |
 | `analyze_performance.py` | Performance analytics and reporting |
 | `ollama_agent.py` | Local Ollama model integration |
-| `itzamna_setup.py` | Guided installer/setup wizard |
+| `pombal_setup.py` | Guided installer/setup wizard |
 | `db_migrate.py` | Database schema migrations |
 | `prepare_training_data.py` | Training data preparation for fine-tuning |
 | `train_qlora.py` / `train_qlora_peft.py` | QLoRA fine-tuning scripts |
@@ -236,7 +236,7 @@ for f in test_*.py; do echo "=== $f ===" && python "$f"; done
 
 ### Test Patterns in This Project
 
-Tests in Itzamna follow consistent patterns:
+Tests in Project Pombal follow consistent patterns:
 
 ```python
 def test_your_feature():
@@ -283,7 +283,7 @@ Include in your pull request:
 - PRs will be reviewed for correctness, test coverage, and consistency with existing patterns.
 - Database schema changes and orchestrator modifications receive extra scrutiny since they affect the entire system.
 - Small, focused PRs are easier to review and more likely to be merged quickly.
-- Expect constructive feedback — we're all here to make ForgeTeam better.
+- Expect constructive feedback — we're all here to make Project Pombal better.
 
 ---
 
@@ -332,7 +332,7 @@ If you experience or witness unacceptable behavior, please report it to the proj
 
 ---
 
-Thank you for contributing to Itzamna! Every improvement — whether it's a typo fix, a new test, or a major feature — helps make ForgeTeam better for everyone. 🏗️
+Thank you for contributing to Project Pombal! Every improvement — whether it's a typo fix, a new test, or a major feature — helps make Project Pombal better for everyone. 🏗️
 ---
 
 ## Related Documentation

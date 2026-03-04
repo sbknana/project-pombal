@@ -1,6 +1,6 @@
-# Itzamna: Multi-Agent AI Orchestration Platform
+# Project Pombal: Multi-Agent AI Orchestration Platform
 
-Itzamna is a self-improving, multi-agent orchestration platform that you control through natural conversation. Tell Claude what you want done -- it handles task management, agent dispatch, progress tracking, and reporting. You make decisions; the system handles execution.
+Project Pombal is a self-improving, multi-agent orchestration platform that you control through natural conversation. Tell Claude what you want done -- it handles task management, agent dispatch, progress tracking, and reporting. You make decisions; the system handles execution.
 
 Built in pure Python stdlib on SQLite. Zero pip dependencies. Runs anywhere Python and Claude Code are installed.
 
@@ -22,7 +22,7 @@ Built in pure Python stdlib on SQLite. Zero pip dependencies. Runs anywhere Pyth
 
 ## Conversational Development
 
-The primary interface to Itzamna is **natural language conversation with Claude**. Claude has MCP access to the full project database and knows how to use every tool in the system. You never need to memorize CLI commands, look up task IDs, or write SQL.
+The primary interface to Project Pombal is **natural language conversation with Claude**. Claude has MCP access to the full project database and knows how to use every tool in the system. You never need to memorize CLI commands, look up task IDs, or write SQL.
 
 ### What it looks like in practice
 
@@ -49,7 +49,7 @@ Everything above can also be done from the command line for automation (cron job
 
 ## Multi-Agent Orchestration
 
-Under the hood, Itzamna dispatches work to **9 specialized agent roles**, each with tailored system prompts, turn budgets, model assignments, and injected context from past experience.
+Under the hood, Project Pombal dispatches work to **9 specialized agent roles**, each with tailored system prompts, turn budgets, model assignments, and injected context from past experience.
 
 | Role | Purpose | Default Model | Turn Budget |
 |------|---------|---------------|-------------|
@@ -181,7 +181,7 @@ Every agent run is recorded as an episode with a reinforcement learning Q-value.
 
 ## Security Pipeline
 
-Itzamna's security review capability is not a checkbox -- it is a full-depth analysis pipeline built on Trail of Bits security skills.
+Project Pombal's security review capability is not a checkbox -- it is a full-depth analysis pipeline built on Trail of Bits security skills.
 
 ### 7 Security Skills
 
@@ -332,7 +332,7 @@ prompts/
 
 ### MCP Server Integration
 
-Itzamna generates MCP configuration during setup, giving AI agents direct database access for querying task status, reading episodes, and updating results.
+Project Pombal generates MCP configuration during setup, giving AI agents direct database access for querying task status, reading episodes, and updating results.
 
 ### Local LLM Support via Ollama
 

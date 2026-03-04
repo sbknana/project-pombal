@@ -1,22 +1,26 @@
 <p align="center">
-  <img src="ItzamnaIcon.png" alt="ForgeTeam" width="200">
+  <img src="ProjectPombal.png" alt="Project Pombal" width="200">
 </p>
 
-<h1 align="center">ForgeTeam</h1>
+<h1 align="center">Project Pombal</h1>
 
 <p align="center">
   <strong>Tell Claude what you want built. Agents do the rest.</strong>
 </p>
 
 <p align="center">
-  <em>Named after Itzamna, the Mayan god of creation, writing, and knowledge</em>
+  <em>Coordinate. Build. Ship.</em>
+</p>
+
+<p align="center">
+  <em>Named after the <a href="https://en.wikipedia.org/wiki/Marquis_of_Pombal">Marquis de Pombal</a>, who coordinated the rebuilding of Lisbon after the 1755 earthquake</em>
 </p>
 
 ---
 
 ## What is this?
 
-ForgeTeam is an AI-powered development team you control through conversation. You talk to Claude in plain English. Claude manages everything else — planning, task creation, agent dispatch, progress tracking, error recovery, and reporting.
+Project Pombal is an AI-powered development team you control through conversation. You talk to Claude in plain English. Claude manages everything else — planning, task creation, agent dispatch, progress tracking, error recovery, and reporting.
 
 No CLI commands to memorize. No task IDs to look up. No SQL to write. You make decisions. Claude handles execution.
 
@@ -229,9 +233,9 @@ python itzamna_setup.py
 
 **2. The installer handles everything:** prerequisites, database, config, MCP integration. Just answer the prompts.
 
-**3. Open Claude Code in your ForgeTeam directory and start talking:**
+**3. Open Claude Code in your Project Pombal directory and start talking:**
 ```bash
-cd ~/ForgeTeam
+cd ~/Project Pombal
 claude
 ```
 
@@ -357,7 +361,7 @@ Manual mode works and is fully documented in [ORCHESTRATOR.md](docs/ORCHESTRATOR
 
 ## Contributing
 
-Contributions welcome. ForgeTeam is built for the vibe coding community — if you're using Claude Code to build software, this is for you.
+Contributions welcome. Project Pombal is built for the vibe coding community — if you're using Claude Code to build software, this is for you.
 
 1. Fork the repo
 2. Create a branch (`git checkout -b feature/my-feature`)
