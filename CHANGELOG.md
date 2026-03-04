@@ -2,6 +2,44 @@
 
 All notable changes to ForgeTeam / Itzamna are documented here.
 
+## [3.0.0] - 2026-03-04
+
+### Added
+
+- **Local LLM support via Ollama.** Run read-only agents (planner, evaluator, code-reviewer, security-reviewer, researcher) on local models. Zero API cost for review roles. (`ollama_agent.py`)
+- **Provider abstraction.** Per-role provider selection in `dispatch_config.json`. Global `--provider` CLI flag for override. Supports `claude` and `ollama` providers.
+- **Inter-agent messaging.** Agents post structured messages to each other across dev-test cycles via `agent_messages` table. Tester posts test results back to Developer. Developer reads messages at cycle start.
+- **Per-tool action logging.** Every tool call logged to `agent_actions` table with input hashes (SHA256), output sizes, error classification, and duration. ForgeSmith uses this for fine-grained analysis.
+- **Forge Arena** (`forge_arena.py`) — Automated agent evaluation and training data generation.
+- **Forge Dashboard** (`forge_dashboard.py`) — Terminal-based performance dashboard.
+- **Performance Analyzer** (`analyze_performance.py`) — Historical agent performance analysis.
+- **ForgeSmith Backfill** (`forgesmith_backfill.py`) — Backfill scoring data from historical logs.
+- **Training Data Preparation** (`prepare_training_data.py`) — Convert arena results to fine-tuning format.
+- **QLoRA Training** (`train_qlora.py`, `train_qlora_peft.py`) — Fine-tune local models on ForgeTeam data.
+- **Coordinator Mode documentation** (`docs/COORDINATOR.md`) — Guide for using Claude Code as a natural language coordinator.
+- **Local LLM documentation** (`docs/LOCAL_LLM.md`) — Complete Ollama setup and configuration guide.
+- **Training documentation** (`docs/TRAINING.md`) — Fine-tuning your own ForgeTeam model.
+- **10 new test files** covering agent actions, agent messages, early termination, episode injection, lessons injection, loop detection, rubric scoring, and task type routing.
+
+### Changed
+
+- Orchestrator synced with production: `ensure_agent_messages_table()`, `post_agent_message()`, `read_agent_messages()`, `mark_messages_read()`, `format_messages_for_prompt()`, `ensure_agent_actions_table()`, `classify_error()`, `log_agent_action()`, `bulk_log_agent_actions()`, `get_action_summary()`.
+- `run_agent_streaming()` — Added `task_id`, `run_id`, `cycle_number` params. Added action logging with SHA256 input hashing.
+- `run_dev_test_loop()` — Added inter-agent message injection at each cycle start. Developer reads unread messages. Tester posts test results (pass/fail/blocked) as structured messages.
+- Updated agent prompts: `developer.md`, `tester.md`, `code-reviewer.md`, `frontend-designer.md`, `_common.md` synced with production.
+- `dispatch_config.json` — Updated turn limits (tester: 75, code-reviewer: 75, security-reviewer: 50). Added provider and Ollama configuration fields.
+- `forgesmith_config.json` — Updated to rubric v12. Added OPRO config block.
+- `schema.sql` — Added `agent_messages` and `agent_actions` tables with indexes.
+- README updated with Coordinator Mode and Local LLM sections.
+
+### Sanitized
+
+- Removed all personal synced storage paths from orchestrator
+- `PROJECT_DIRS` defaults to empty dict (populated via config)
+- `GITHUB_OWNER` defaults to empty string
+- `THEFORGE_DB` defaults to relative `Path("theforge.db")`
+- All hardcoded `/data/` paths replaced with config-based or relative paths
+
 ## [2.1.0] - 2026-02-27
 
 ### Added

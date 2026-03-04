@@ -37,6 +37,7 @@ Copyright 2026 Forgeborn
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -61,7 +62,7 @@ except ImportError:
 
 # --- Constants ---
 
-THEFORGE_DB = Path(r"TheForge\theforge.db")
+THEFORGE_DB = Path("theforge.db")
 MCP_CONFIG = Path(__file__).parent / "mcp_config.json"
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 SKILLS_DIR = Path(__file__).parent / "skills" / "security"
@@ -153,28 +154,9 @@ MAX_MANAGER_ROUNDS = 3       # max plan-execute-evaluate rounds
 MAX_TASKS_PER_PLAN = 8       # planner can't create more than this
 MAX_FOLLOWUP_TASKS = 4       # evaluator can't create more than this per round
 
-# Project codenames mapped to their synced storage directories
-PROJECT_DIRS = {
-    "stampede": r"usb-duplicator",
-    "folder2flash": r"USBCopier",
-    "magnetype": r"TextToSTL-NamepalteWithMagnets",
-    "youtubedownloader": r"YouTubeDownloader",
-    "cascade pro": r"CascadePro",
-    "marketeer": r"marketeer",
-    "arrmada": r"media-server-setup",
-    "claudestick": r"claude-portable",
-    "forgemind": r"TheForge",
-    "codecourier": r"CodeCourier\CodeCourier",
-    "whydah": r"Whydah",
-    "wipestation": r"WipeStation",
-    "fellowshipfirst": r"FellowshipFirst",
-    "doge-habeus": r"DOGE-Habeus - POH-POS",
-    "hoverfly": r"Hoverfly",
-    "forgeteam": r"ForgeTeam",
-    "forgebridge": r"ForgeBridge",
-    "localllm-setup": r"LocalLLM-Setup",
-    "loupe": r"MTG-Kiosk",
-}
+# Project codenames mapped to their local directories
+# Populate via forge_config.json or dispatch_config.json project_dirs
+PROJECT_DIRS = {}
 
 # For sorting text-based priority values
 PRIORITY_ORDER = {
@@ -185,7 +167,49 @@ PRIORITY_ORDER = {
 }
 
 # Default GitHub owner for --setup-repos
-GITHUB_OWNER = "[OWNER]"
+GITHUB_OWNER = ""
+
+
+# --- Provider Abstraction (Claude / Ollama) ---
+
+def get_provider(role, dispatch_config=None):
+    """Determine which provider to use for a given role.
+
+    Checks dispatch_config for role-specific overrides like
+    'provider_planner': 'ollama', falling back to the global 'provider' key,
+    then defaulting to 'claude'.
+    """
+    if dispatch_config is None:
+        return "claude"
+    # Check role-specific override first
+    role_key = f"provider_{role.replace('-', '_')}"
+    provider = dispatch_config.get(role_key)
+    if provider:
+        return provider
+    # Fall back to global provider setting
+    return dispatch_config.get("provider", "claude")
+
+
+def get_ollama_model(role, dispatch_config=None):
+    """Get the Ollama model name for a given role.
+
+    Checks for role-specific model override like 'ollama_model_planner',
+    then falls back to global 'ollama_model'.
+    """
+    if dispatch_config is None:
+        return "qwen3.5:27b"
+    role_key = f"ollama_model_{role.replace('-', '_')}"
+    model = dispatch_config.get(role_key)
+    if model:
+        return model
+    return dispatch_config.get("ollama_model", "qwen3.5:27b")
+
+
+def get_ollama_base_url(dispatch_config=None):
+    """Get the Ollama base URL from config or environment."""
+    if dispatch_config and "ollama_base_url" in dispatch_config:
+        return dispatch_config["ollama_base_url"]
+    return os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 
 
 # --- Portable Configuration ---
@@ -513,6 +537,285 @@ def ensure_agent_episodes_table():
         conn.close()
     except Exception as e:
         print(f"  [Reflexion] WARNING: Could not ensure agent_episodes table: {e}")
+
+
+# --- Inter-Agent Message Channel ---
+
+def ensure_agent_messages_table():
+    """Create agent_messages table if it does not exist. Idempotent."""
+    try:
+        conn = get_db_connection(write=True)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS agent_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL,
+                cycle_number INTEGER NOT NULL,
+                from_role TEXT NOT NULL,
+                to_role TEXT NOT NULL,
+                message_type TEXT NOT NULL,
+                content TEXT NOT NULL,
+                read_by_cycle INTEGER,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"  [Messages] WARNING: Could not ensure agent_messages table: {e}")
+
+
+def post_agent_message(task_id, cycle, from_role, to_role, msg_type, content):
+    """Insert a structured message from one agent role to another."""
+    try:
+        ensure_agent_messages_table()
+        conn = get_db_connection(write=True)
+        conn.execute(
+            """INSERT INTO agent_messages
+               (task_id, cycle_number, from_role, to_role, message_type, content)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (task_id, cycle, from_role, to_role, msg_type, content),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"  [Messages] WARNING: Failed to post agent message: {e}")
+
+
+def read_agent_messages(task_id, to_role, max_cycle=None):
+    """Fetch unread messages for a given role on a task."""
+    try:
+        ensure_agent_messages_table()
+        conn = get_db_connection()
+        if max_cycle is not None:
+            rows = conn.execute(
+                """SELECT id, task_id, cycle_number, from_role, to_role,
+                          message_type, content, created_at
+                   FROM agent_messages
+                   WHERE task_id = ? AND to_role = ? AND read_by_cycle IS NULL
+                         AND cycle_number <= ?
+                   ORDER BY cycle_number ASC, id ASC""",
+                (task_id, to_role, max_cycle),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT id, task_id, cycle_number, from_role, to_role,
+                          message_type, content, created_at
+                   FROM agent_messages
+                   WHERE task_id = ? AND to_role = ? AND read_by_cycle IS NULL
+                   ORDER BY cycle_number ASC, id ASC""",
+                (task_id, to_role),
+            ).fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+    except Exception as e:
+        print(f"  [Messages] WARNING: Failed to read agent messages: {e}")
+        return []
+
+
+def mark_messages_read(task_id, to_role, cycle_number):
+    """Mark all unread messages for a role as consumed by a given cycle."""
+    try:
+        ensure_agent_messages_table()
+        conn = get_db_connection(write=True)
+        conn.execute(
+            """UPDATE agent_messages
+               SET read_by_cycle = ?
+               WHERE task_id = ? AND to_role = ? AND read_by_cycle IS NULL""",
+            (cycle_number, task_id, to_role),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"  [Messages] WARNING: Failed to mark messages as read: {e}")
+
+
+def format_messages_for_prompt(messages):
+    """Format agent messages into a prompt-friendly string."""
+    if not messages:
+        return ""
+    lines = ["## Messages from Other Agents\n"]
+    for msg in messages:
+        from_role = msg.get("from_role", "unknown")
+        msg_type = msg.get("message_type", "unknown")
+        content = msg.get("content", "")
+        cycle = msg.get("cycle_number", "?")
+        try:
+            parsed = json.loads(content)
+            if isinstance(parsed, dict):
+                content_str = ", ".join(f"{k}: {v}" for k, v in parsed.items())
+            else:
+                content_str = str(parsed)
+        except (json.JSONDecodeError, TypeError):
+            content_str = content
+        lines.append(f"**[{from_role}]** (cycle {cycle}, {msg_type}): {content_str}")
+    return "\n".join(lines)
+
+
+# --- Agent Action Logging ---
+
+def ensure_agent_actions_table():
+    """Create agent_actions table if it does not exist.
+
+    Idempotent — safe to call every time.
+    """
+    try:
+        conn = get_db_connection(write=True)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS agent_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL,
+                run_id INTEGER,
+                cycle_number INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                turn_number INTEGER NOT NULL,
+                tool_name TEXT NOT NULL,
+                tool_input_preview TEXT,
+                input_hash TEXT,
+                output_length INTEGER,
+                success INTEGER NOT NULL DEFAULT 1,
+                error_type TEXT,
+                error_summary TEXT,
+                duration_ms INTEGER,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_agent_actions_task "
+            "ON agent_actions(task_id, cycle_number)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_agent_actions_tool "
+            "ON agent_actions(tool_name, success)"
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"  [ActionLog] WARNING: Could not ensure agent_actions table: {e}")
+
+
+def classify_error(error_text):
+    """Classify an error string into a category for the error_type field.
+
+    Returns one of: timeout, file_not_found, permission, syntax_error,
+    import_error, test_failure, unknown.
+    """
+    if not error_text:
+        return "unknown"
+    lower = error_text.lower()
+    if "timed out" in lower:
+        return "timeout"
+    if "no such file" in lower or "not found" in lower:
+        return "file_not_found"
+    if "permission denied" in lower:
+        return "permission"
+    if "syntaxerror" in lower:
+        return "syntax_error"
+    if "modulenotfounderror" in lower or "importerror" in lower:
+        return "import_error"
+    if "failed" in lower or "assertionerror" in lower:
+        return "test_failure"
+    return "unknown"
+
+
+def log_agent_action(task_id, run_id, cycle, role, turn, tool_name,
+                     tool_input_preview, input_hash, output_length,
+                     success, error_type, error_summary, duration_ms):
+    """Insert a single agent action record into the database.
+
+    Never crashes the orchestrator — all errors are logged and swallowed.
+    """
+    try:
+        conn = get_db_connection(write=True)
+        conn.execute(
+            """INSERT INTO agent_actions
+               (task_id, run_id, cycle_number, role, turn_number, tool_name,
+                tool_input_preview, input_hash, output_length, success,
+                error_type, error_summary, duration_ms)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (task_id, run_id, cycle, role, turn, tool_name,
+             tool_input_preview, input_hash, output_length,
+             1 if success else 0, error_type, error_summary, duration_ms),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass  # Never crash the orchestrator for telemetry
+
+
+def bulk_log_agent_actions(action_log, task_id, run_id, cycle, role):
+    """Bulk insert all actions from an action_log list into the database.
+
+    More efficient than individual inserts — uses a single transaction.
+    Never crashes the orchestrator.
+    """
+    if not action_log:
+        return
+    try:
+        ensure_agent_actions_table()
+        conn = get_db_connection(write=True)
+        conn.executemany(
+            """INSERT INTO agent_actions
+               (task_id, run_id, cycle_number, role, turn_number, tool_name,
+                tool_input_preview, input_hash, output_length, success,
+                error_type, error_summary, duration_ms)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [
+                (task_id, run_id, cycle, role, a["turn"], a["tool"],
+                 a.get("input_preview"), a.get("input_hash"),
+                 a.get("output_length"), 1 if a.get("success", True) else 0,
+                 a.get("error_type"), a.get("error_summary"),
+                 a.get("duration_ms"))
+                for a in action_log
+            ],
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"  [ActionLog] WARNING: Failed to bulk insert actions: {e}")
+
+
+def get_action_summary(task_id, cycle=None):
+    """Get per-tool action summary for ForgeSmith analysis.
+
+    Returns dict: {tool_name: {count, success_count, fail_count}}
+    If cycle is None, returns summary across all cycles for the task.
+    """
+    try:
+        ensure_agent_actions_table()
+        conn = get_db_connection()
+        if cycle is not None:
+            rows = conn.execute(
+                """SELECT tool_name,
+                          COUNT(*) as cnt,
+                          SUM(success) as ok,
+                          COUNT(*) - SUM(success) as fail
+                   FROM agent_actions
+                   WHERE task_id = ? AND cycle_number = ?
+                   GROUP BY tool_name""",
+                (task_id, cycle),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT tool_name,
+                          COUNT(*) as cnt,
+                          SUM(success) as ok,
+                          COUNT(*) - SUM(success) as fail
+                   FROM agent_actions
+                   WHERE task_id = ?
+                   GROUP BY tool_name""",
+                (task_id,),
+            ).fetchall()
+        conn.close()
+        return {
+            row["tool_name"]: {
+                "count": row["cnt"],
+                "success_count": row["ok"],
+                "fail_count": row["fail"],
+            }
+            for row in rows
+        }
+    except Exception:
+        return {}
 
 
 def parse_reflection(result_text):
@@ -1957,12 +2260,17 @@ def _detect_tool_loop(tool_history, tool_errors, warn_threshold=3, terminate_thr
         return ("ok", consecutive_failures, last_sig)
 
 
-async def run_agent_streaming(cmd, role="developer", timeout=None, output=None, max_turns=None):
+async def run_agent_streaming(cmd, role="developer", timeout=None, output=None,
+                              max_turns=None, task_id=None, run_id=None,
+                              cycle_number=1):
     """Spawn claude -p with stream-json output for real-time stuck detection.
 
     Monitors agent output turn-by-turn and terminates early if stuck signals
     are detected. Only applies file-change monitoring to non-exempt roles
     (developer, tester, debugger, etc.).
+
+    When task_id is provided, per-tool actions are logged to the agent_actions
+    table for observability and ForgeSmith analysis.
 
     Returns the same dict format as run_agent().
     """
@@ -1979,6 +2287,7 @@ async def run_agent_streaming(cmd, role="developer", timeout=None, output=None, 
     has_any_file_change = False
     tool_history = []          # list of "tool_name:key_input" strings
     tool_errors = []           # list of error strings (None if success, string if error)
+    action_log = []            # per-tool action entries for agent_actions table
     stuck_phrase_count = 0
     all_text_chunks = []       # accumulate assistant text for final result
     result_data = None         # the final "result" message from stream-json
@@ -2072,6 +2381,21 @@ async def run_agent_streaming(cmd, role="developer", timeout=None, output=None, 
                         tool_name = block.get("name", "")
                         tool_input = block.get("input", {})
                         turn_count += 1
+
+                        # Record action entry for action logging
+                        try:
+                            input_str = json.dumps(tool_input, default=str)
+                        except (TypeError, ValueError):
+                            input_str = str(tool_input)
+                        action_log.append({
+                            "turn": turn_count,
+                            "tool": tool_name,
+                            "input_preview": input_str[:200],
+                            "input_hash": hashlib.sha256(
+                                input_str.encode("utf-8", errors="replace")
+                            ).hexdigest(),
+                            "timestamp": time.time(),
+                        })
 
                         # Track file-modifying tools
                         if tool_name in ("Edit", "Write", "NotebookEdit"):
@@ -2169,6 +2493,29 @@ async def run_agent_streaming(cmd, role="developer", timeout=None, output=None, 
 
                         tool_errors.append(error_text)
 
+                        # Update the most recent action_log entry with result
+                        if action_log:
+                            entry = action_log[-1]
+                            # Compute output length from content
+                            if isinstance(content, str):
+                                result_len = len(content)
+                            elif isinstance(content, list):
+                                result_len = sum(
+                                    len(c.get("text", ""))
+                                    for c in content
+                                    if isinstance(c, dict)
+                                )
+                            else:
+                                result_len = 0
+                            entry["success"] = not is_error
+                            entry["output_length"] = result_len
+                            entry["duration_ms"] = int(
+                                (time.time() - entry.get("timestamp", time.time())) * 1000
+                            )
+                            if is_error and error_text:
+                                entry["error_type"] = classify_error(error_text)
+                                entry["error_summary"] = error_text[:200]
+
     except Exception as e:
         early_term_reason = f"Streaming monitor error: {e}"
 
@@ -2232,6 +2579,13 @@ async def run_agent_streaming(cmd, role="developer", timeout=None, output=None, 
             result["errors"].append(f"stderr: {stderr_text}")
     except Exception:
         pass
+
+    # Bulk insert action log to agent_actions table
+    if task_id and action_log:
+        bulk_log_agent_actions(action_log, task_id, run_id, cycle_number, role)
+
+    # Attach action_log to result for caller inspection
+    result["action_log"] = action_log
 
     return result
 
@@ -2734,6 +3088,49 @@ def adjust_dynamic_budget(current_budget, max_turns, result_text):
     return current_budget
 
 
+# --- Provider-Aware Agent Dispatch ---
+
+async def dispatch_agent(cmd, role, output, max_turns, task_id, cycle,
+                         system_prompt=None, project_dir=None, args=None):
+    """Dispatch an agent using the configured provider (Claude or Ollama).
+
+    For Claude: delegates to run_agent_streaming() or run_agent().
+    For Ollama: delegates to run_ollama_agent().
+
+    Returns the same result dict format regardless of provider.
+    """
+    dispatch_config = getattr(args, "dispatch_config", None) if args else None
+    provider_override = getattr(args, "provider", None) if args else None
+
+    # Determine provider: CLI override > config > default (claude)
+    if provider_override:
+        provider = provider_override
+    else:
+        provider = get_provider(role, dispatch_config)
+
+    if provider == "ollama" and system_prompt and project_dir:
+        from ollama_agent import run_ollama_agent
+        model = get_ollama_model(role, dispatch_config)
+        base_url = get_ollama_base_url(dispatch_config)
+        return run_ollama_agent(
+            system_prompt=system_prompt,
+            project_dir=project_dir,
+            role=role,
+            model=model,
+            base_url=base_url,
+            max_turns=max_turns,
+        )
+
+    # Default: Claude via run_agent_streaming
+    use_streaming = role not in EARLY_TERM_EXEMPT_ROLES
+    if use_streaming:
+        return await run_agent_streaming(
+            cmd, role=role, output=output, max_turns=max_turns,
+            task_id=task_id, run_id=None, cycle_number=cycle)
+    else:
+        return await run_agent(cmd)
+
+
 # --- Dev+Tester Loop (Phase 2) ---
 
 async def run_dev_test_loop(task, project_dir, project_context, args, output=None):
@@ -2809,6 +3206,15 @@ async def run_dev_test_loop(task, project_dir, project_context, args, output=Non
         log(f"\n  [Cycle {cycle}] Running Developer agent "
             f"(budget: {dev_turns_allocated}/{dev_turns_max})...", output)
 
+        # --- Inter-agent messages: inject unread messages into developer context ---
+        agent_msgs = read_agent_messages(task_id, task_role)
+        if agent_msgs:
+            message_context = format_messages_for_prompt(agent_msgs)
+            mark_messages_read(task_id, task_role, cycle)
+            log(f"  [Cycle {cycle}] Injected {len(agent_msgs)} message(s) from other agents", output)
+        else:
+            message_context = ""
+
         # Build extra context from compaction history
         # After cycle 2+, consolidate ALL prior cycles into a single section
         # to prevent context rot from accumulated raw output
@@ -2825,6 +3231,10 @@ async def run_dev_test_loop(task, project_dir, project_context, args, output=Non
         else:
             extra_context = "\n\n".join(compaction_history) if compaction_history else ""
 
+        # Prepend inter-agent messages if any
+        if message_context:
+            extra_context = message_context + "\n\n" + extra_context if extra_context else message_context
+
         dev_prompt = build_system_prompt(
             task, project_context, project_dir,
             role=task_role, extra_context=extra_context,
@@ -2838,11 +3248,10 @@ async def run_dev_test_loop(task, project_dir, project_context, args, output=Non
             streaming=use_streaming,
         )
 
-        if use_streaming:
-            dev_result = await run_agent_streaming(
-                dev_cmd, role=task_role, output=output, max_turns=dev_turns_allocated)
-        else:
-            dev_result = await run_agent(dev_cmd)
+        dev_result = await dispatch_agent(
+            dev_cmd, role=task_role, output=output, max_turns=dev_turns_allocated,
+            task_id=task_id, cycle=cycle, system_prompt=dev_prompt,
+            project_dir=project_dir, args=args)
         # Tag result with dynamic budget info for telemetry
         dev_result["turns_allocated"] = dev_turns_allocated
         dev_result["turns_max"] = dev_turns_max
@@ -2980,8 +3389,10 @@ async def run_dev_test_loop(task, project_dir, project_context, args, output=Non
             streaming=True,
         )
 
-        tester_result = await run_agent_streaming(
-            tester_cmd, role="tester", output=output, max_turns=tester_turns_allocated)
+        tester_result = await dispatch_agent(
+            tester_cmd, role="tester", output=output, max_turns=tester_turns_allocated,
+            task_id=task_id, cycle=cycle, system_prompt=tester_prompt,
+            project_dir=project_dir, args=args)
         # Tag tester result with dynamic budget info for telemetry
         tester_result["turns_allocated"] = tester_turns_allocated
         tester_result["turns_max"] = tester_turns_max
@@ -3021,6 +3432,14 @@ async def run_dev_test_loop(task, project_dir, project_context, args, output=Non
 
         if test_outcome == "pass":
             log(f"  [Cycle {cycle}] All tests passed!", output)
+            msg_content = json.dumps({
+                "outcome": "pass",
+                "tests_passed": test_results["tests_passed"],
+                "tests_run": test_results["tests_run"],
+            })
+            post_agent_message(task_id, cycle, "tester", task_role,
+                               "test_passed", msg_content)
+            log(f"  [Cycle {cycle}] Posted test_passed message for {task_role}", output)
             clear_checkpoints(task_id)  # success — no need for checkpoints
             tester_result["cost"] = total_cost
             tester_result["duration"] = total_duration
@@ -3035,6 +3454,13 @@ async def run_dev_test_loop(task, project_dir, project_context, args, output=Non
 
         elif test_outcome == "blocked":
             log(f"  [Cycle {cycle}] Tester is blocked (missing dependency, build error, etc.).", output)
+            msg_content = json.dumps({
+                "outcome": "blocked",
+                "details": test_results.get("failure_details", [])[:3],
+            })
+            post_agent_message(task_id, cycle, "tester", task_role,
+                               "blocker_update", msg_content)
+            log(f"  [Cycle {cycle}] Posted blocker_update message for {task_role}", output)
             return tester_result, cycle, "tester_blocked"
 
         elif (test_outcome == "unknown" and test_results["tests_run"] == 0
@@ -3050,6 +3476,15 @@ async def run_dev_test_loop(task, project_dir, project_context, args, output=Non
         else:
             # test_outcome == "fail" (with actual test failures)
             log(f"  [Cycle {cycle}] {test_results['tests_failed']} test(s) failed.", output)
+            msg_content = json.dumps({
+                "outcome": "fail",
+                "tests_failed": test_results["tests_failed"],
+                "tests_run": test_results["tests_run"],
+                "failures": test_results.get("failure_details", [])[:5],
+            })
+            post_agent_message(task_id, cycle, "tester", task_role,
+                               "test_failures", msg_content)
+            log(f"  [Cycle {cycle}] Posted test_failures message for {task_role}", output)
             if test_results["failure_details"]:
                 for detail in test_results["failure_details"][:5]:
                     safe_detail = detail.encode("ascii", errors="replace").decode("ascii")
@@ -4836,6 +5271,8 @@ async def async_main():
     parser.add_argument("--dev-test", action="store_true", help="Enable Dev+Tester iteration loop mode")
     parser.add_argument("--security-review", action="store_true", default=None,
                         help="Run security review after dev-test passes (default: from dispatch config)")
+    parser.add_argument("--provider", choices=["claude", "ollama"], default=None,
+                        help="Force provider for all agents (default: from dispatch config)")
     parser.add_argument("--dry-run", action="store_true", help="Print command without executing")
     parser.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompt")
 

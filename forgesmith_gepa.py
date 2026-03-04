@@ -55,6 +55,12 @@ BACKUP_DIR = SCRIPT_DIR / ".forgesmith-backups"
 
 # --- Constants ---
 
+# H3 fix: Whitelist valid role names to prevent path traversal in backup filenames
+ALLOWED_ROLES = frozenset({
+    "developer", "tester", "planner", "evaluator", "security-reviewer",
+    "frontend-designer", "integration-tester", "debugger", "code-reviewer",
+})
+
 MIN_EPISODES_FOR_GEPA = 20
 MAX_DIFF_RATIO = 0.20  # Max 20% change per evolution cycle
 GEPA_BUDGET = "light"  # light/medium/heavy — start conservative
@@ -297,11 +303,17 @@ def run_gepa_for_role(role, episodes, cfg, dry_run=False):
             api_key = os.environ.get("ANTHROPIC_API_KEY")
             if not api_key:
                 log("ERROR: ANTHROPIC_API_KEY required for Anthropic models but not set.")
-                log("HINT: Use a local model instead (default: ollama_chat/devstral-small-2:24b)")
+                log("HINT: Set via environment variable (never hardcode).")
+                log("HINT: Or use a local model instead (default: ollama_chat/devstral-small-2:24b)")
+                return None
+            # H2 fix: Validate key format without logging it
+            if not api_key.startswith("sk-ant-"):
+                log("ERROR: ANTHROPIC_API_KEY doesn't look valid (expected sk-ant-... prefix)")
                 return None
             lm = dspy.LM(model_name, api_key=api_key)
             reflection_lm = dspy.LM(reflection_model, api_key=api_key)
             log(f"WARNING: Using Anthropic API — this costs real money! Model: {model_name}")
+            # H2: Do NOT log key or key length — only confirm it was loaded from env
         elif model_name.startswith("ollama"):
             # Local model via Ollama on forge-inference (free)
             ollama_base = os.environ.get("OLLAMA_BASE_URL", "http://10.10.10.5:11434")
@@ -490,11 +502,23 @@ def store_evolved_prompt(result, run_id, cfg, dry_run=False):
                 "diff_ratio": diff_ratio, "stored": False}
 
     # Backup current baseline
+    # H3 fix: Validate role against whitelist to prevent path traversal
+    if role not in ALLOWED_ROLES:
+        log(f"ERROR: Role '{role}' not in ALLOWED_ROLES. "
+            f"Valid roles: {sorted(ALLOWED_ROLES)}")
+        return {"version": new_version, "file": str(versioned_path),
+                "diff_ratio": diff_ratio, "stored": False, "error": "invalid_role"}
     BACKUP_DIR.mkdir(exist_ok=True)
-    baseline = PROMPTS_DIR / f"{role}.md"
+    safe_role = os.path.basename(role)  # Belt-and-suspenders: strip any path components
+    baseline = PROMPTS_DIR / f"{safe_role}.md"
     if baseline.exists():
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_path = BACKUP_DIR / f"{role}.md.{ts}.pre-gepa.bak"
+        backup_path = BACKUP_DIR / f"{safe_role}.md.{ts}.pre-gepa.bak"
+        # Verify backup stays within BACKUP_DIR
+        if not backup_path.resolve().is_relative_to(BACKUP_DIR.resolve()):
+            log(f"ERROR: Backup path escapes BACKUP_DIR: {backup_path}")
+            return {"version": new_version, "file": str(versioned_path),
+                    "diff_ratio": diff_ratio, "stored": False, "error": "path_traversal"}
         shutil.copy2(baseline, backup_path)
 
     # Write versioned prompt file
