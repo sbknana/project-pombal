@@ -22,11 +22,20 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import sqlite3
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+
+# H1 fix: Whitelist valid model identifiers to prevent command injection via --model
+ALLOWED_MODELS = frozenset({
+    "sonnet", "opus", "haiku",
+    "claude-sonnet-4-20250514", "claude-opus-4-20250514",
+    "claude-haiku-4-5-20251001",
+    "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022",
+})
 
 # --- Paths ---
 
@@ -250,6 +259,12 @@ def call_claude_for_rules(prompt, cfg=None):
     simba_cfg = (cfg or {}).get("simba", {})
     model = simba_cfg.get("model", "sonnet")
     timeout = simba_cfg.get("timeout_seconds", 120)
+
+    # H1 fix: Validate model against whitelist to prevent command injection
+    if model not in ALLOWED_MODELS:
+        log(f"ERROR: Model '{model}' not in ALLOWED_MODELS. "
+            f"Valid models: {sorted(ALLOWED_MODELS)}")
+        return None
 
     cmd = [
         "claude",

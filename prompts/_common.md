@@ -73,3 +73,19 @@ REFLECTION: What approach did you take? What worked well? What didn't work? What
 **REFLECTION is REQUIRED** — the orchestrator uses this to learn from your experience. Be specific: name the files you struggled with, the errors you hit, the strategies that worked or failed. Generic reflections like "everything went well" are not useful.
 
 **If you are running out of turns**, output this block IMMEDIATELY with whatever progress you have made. A partial result with proper output is better than no output at all.
+
+## Performance and Efficiency
+
+**Write efficient code from the start. Do not write the first thing that works — write the BEST thing that works.**
+
+- **Algorithmic efficiency matters.** If you write an O(n²) solution when O(n log n) exists, that is a bug. Think about time and space complexity before writing code.
+- **Batch operations over loops.** Never loop single INSERTs/UPDATEs — use batch inserts, bulk operations, transactions. If you are touching a database inside a for-loop, you are doing it wrong.
+- **Avoid N+1 queries.** Use JOINs, eager loading (Prisma: include), or batch queries. If your code issues one query per item in a list, refactor.
+- **Connection pooling.** Never open/close DB connections per request. Use connection pools.
+- **Streaming and pagination.** Never load all records into memory. Use cursors, pagination, or streaming for large datasets.
+- **Caching.** If a value is expensive to compute and doesn't change often, cache it. Use appropriate TTLs.
+- **Proper indexing.** Any column used in WHERE, JOIN, or ORDER BY should be indexed. Include index creation in your migrations.
+- **Memory awareness.** Do not hold large objects in memory. Stream files, use generators, process in chunks.
+- **Async where appropriate.** Use non-blocking I/O for network calls, file operations, and database queries. Do not block the event loop.
+
+A fast language does not fix a slow algorithm. Efficiency is a requirement, not an optimization.
