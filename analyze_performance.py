@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ForgeTeam Performance Analysis Script
+Project Pombal Performance Analysis Script
 Copyright 2026, Forgeborn
 
 Parses orchestrator checkpoint files and TheForge task history to produce
@@ -516,7 +516,7 @@ def print_summary(report):
     """Print a human-readable summary to stderr."""
     s = report["summary"]
     print(f"\n{'='*60}", file=sys.stderr)
-    print("  ForgeTeam Performance Report", file=sys.stderr)
+    print("  Project Pombal Performance Report", file=sys.stderr)
     print(f"  Generated: {report['generated_at']}", file=sys.stderr)
     print(f"{'='*60}\n", file=sys.stderr)
 
@@ -565,7 +565,7 @@ def print_summary(report):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="ForgeTeam Performance Analysis — parse orchestrator data and produce a JSON report"
+        description="Project Pombal Performance Analysis — parse orchestrator data and produce a JSON report"
     )
     parser.add_argument(
         "--project", type=int, default=None,

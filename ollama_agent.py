@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ollama-based tool-calling agent for ForgeTeam.
+"""Ollama-based tool-calling agent for Project Pombal.
 
 A minimal tool-calling agent loop using Ollama's API with zero external
 dependencies (uses urllib.request). Provides the same result dict format as
@@ -544,7 +544,7 @@ def run_ollama_agent(system_prompt, project_dir, role="developer",
     duration = time.time() - start_time
     result_text = "\n".join(all_text)
 
-    # Check for RESULT: block in output (ForgeTeam convention)
+    # Check for RESULT: block in output (Project Pombal convention)
     success = "RESULT:" in result_text or turn_count < max_turns
 
     print(f"  [Ollama] Completed: {turn_count} turns, {duration:.1f}s, "

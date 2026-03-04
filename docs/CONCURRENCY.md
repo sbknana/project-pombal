@@ -1,4 +1,4 @@
-# ForgeTeam Concurrency Guide
+# Project Pombal Concurrency Guide
 
 Benchmark results and tuning recommendations for running multiple agents in parallel.
 

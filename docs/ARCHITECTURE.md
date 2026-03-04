@@ -1,8 +1,8 @@
-# ARCHITECTURE.md — Itzamna (ForgeTeam)
+# ARCHITECTURE.md — Project Pombal
 
 ## Table of Contents
 
-- [ARCHITECTURE.md — Itzamna (ForgeTeam)](#architecturemd-itzamna-forgeteam)
+- [ARCHITECTURE.md — Project Pombal](#architecturemd-project-pombal)
   - [How It Works](#how-it-works)
   - [System Overview](#system-overview)
   - [Data Flow](#data-flow)
@@ -24,9 +24,9 @@
 
 ## How It Works
 
-ForgeTeam is a multi-agent AI orchestration platform that coordinates AI agents (powered by Claude Code and optionally Ollama) to work on software development tasks. Here's how it works in plain English:
+Project Pombal is a multi-agent AI orchestration platform that coordinates AI agents (powered by Claude Code and optionally Ollama) to work on software development tasks. Here's how it works in plain English:
 
-**When you set up ForgeTeam**, you run `itzamna_setup.py`, which walks you through a guided installation: checking prerequisites, choosing an install path, creating a SQLite database with all required tables, and generating configuration files. This is the "Itzamna" installer — the front door to the whole system.
+**When you set up Project Pombal**, you run `pombal_setup.py`, which walks you through a guided installation: checking prerequisites, choosing an install path, creating a SQLite database with all required tables, and generating configuration files. This is the installer — the front door to the whole system.
 
 **When you dispatch work**, the `forge_orchestrator.py` scans your database for pending tasks, scores and prioritizes them, then dispatches them to specialized AI agent roles. The orchestrator runs a **dev-test loop**: a Developer agent writes code, then a Tester agent validates it, cycling back and forth until the task passes or the turn budget is exhausted. There's also a Security Reviewer role that can audit code. Each role gets a tailored system prompt, relevant lessons from past experiences, and episodic memory injected into its context.
 
@@ -47,7 +47,7 @@ ForgeTeam is a multi-agent AI orchestration platform that coordinates AI agents 
 
 ```mermaid
 graph TD
-    Setup[itzamna_setup.py<br>Guided Installer] -->|Creates| DB[(SQLite Database)]
+    Setup[pombal_setup.py<br>Guided Installer] -->|Creates| DB[(SQLite Database)]
     Setup -->|Generates| Config[Config Files]
 
     CLI[User / CLI] -->|dispatch / run| Orchestrator[forge_orchestrator.py<br>Task Orchestrator]
@@ -258,7 +258,7 @@ erDiagram
 ├── forgesmith_backfill.py        # Backfills episode data from historical logs
 ├── forge_dashboard.py            # Terminal dashboard — task stats, project completion, activity
 ├── forge_arena.py                # Adversarial testing arena — stress-tests agents, exports LoRA data
-├── itzamna_setup.py              # Guided installer — prerequisites, DB setup, config generation
+├── pombal_setup.py               # Guided installer — prerequisites, DB setup, config generation
 ├── db_migrate.py                 # Database schema migrations (v0→v1→v2→v3)
 ├── analyze_performance.py        # Performance reporting — completion rates, throughput, checkpoint analysis
 ├── ollama_agent.py               # Local Ollama agent — sandboxed tool execution, file operations

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to ForgeTeam / Itzamna are documented here.
+All notable changes to Project Pombal are documented here.
 
 ## [3.0.0] - 2026-03-04
 
@@ -15,10 +15,10 @@ All notable changes to ForgeTeam / Itzamna are documented here.
 - **Performance Analyzer** (`analyze_performance.py`) — Historical agent performance analysis.
 - **ForgeSmith Backfill** (`forgesmith_backfill.py`) — Backfill scoring data from historical logs.
 - **Training Data Preparation** (`prepare_training_data.py`) — Convert arena results to fine-tuning format.
-- **QLoRA Training** (`train_qlora.py`, `train_qlora_peft.py`) — Fine-tune local models on ForgeTeam data.
+- **QLoRA Training** (`train_qlora.py`, `train_qlora_peft.py`) — Fine-tune local models on Project Pombal data.
 - **Coordinator Mode documentation** (`docs/COORDINATOR.md`) — Guide for using Claude Code as a natural language coordinator.
 - **Local LLM documentation** (`docs/LOCAL_LLM.md`) — Complete Ollama setup and configuration guide.
-- **Training documentation** (`docs/TRAINING.md`) — Fine-tuning your own ForgeTeam model.
+- **Training documentation** (`docs/TRAINING.md`) — Fine-tuning your own Project Pombal model.
 - **10 new test files** covering agent actions, agent messages, early termination, episode injection, lessons injection, loop detection, rubric scoring, and task type routing.
 
 ### Changed
@@ -77,7 +77,7 @@ New keys in `dispatch_config.json`:
 
 ### Added
 
-- Initial release of Itzamna — portable installer for ForgeTeam
+- Initial release of Project Pombal — portable installer for Project Pombal
 - Interactive setup wizard (`itzamna_setup.py`)
 - Database schema (19 tables, 5 views)
 - Agent prompt files for all roles
