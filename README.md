@@ -40,6 +40,52 @@ ForgeTeam turns Claude Code into a team. Instead of one AI doing everything, you
 - **Rubric-based scoring.** Every agent run is scored against role-specific rubrics (code quality, test coverage, turn efficiency). ForgeSmith uses these scores to evolve rubric weights over time.
 - **Zero dependencies.** Pure Python stdlib. No pip, no npm, no Docker. Just Python + Claude Code + a SQLite database.
 - **Security by default.** Prompt injection defenses, safe git staging (`git add -u`), and strict MCP config isolation. Agents use the orchestrator's MCP config only.
+- **Local LLM support.** Run read-only agents (planner, evaluator, code-reviewer, researcher) on local models via Ollama. Zero API cost for review roles. Developer and tester still use Claude for quality.
+- **Inter-agent messaging.** Agents post structured messages to each other across dev-test cycles. Tester tells Developer exactly what failed. Developer reads those messages at the start of the next cycle.
+- **Per-tool action logging.** Every tool call is logged with input hashes, output sizes, and error classification. ForgeSmith uses this for fine-grained performance analysis.
+
+## Coordinator Mode (Recommended)
+
+**The most powerful way to use ForgeTeam is through Claude Code as a natural language coordinator.** Instead of memorizing CLI commands, you talk to Claude in plain English. Claude creates tasks, dispatches agents, monitors results, and reports back.
+
+```
+You: "Build me user authentication with Google OAuth"
+
+Claude: That's a multi-step feature. Let me plan it out:
+  1. Set up OAuth provider configuration
+  2. Create login/callback routes
+  3. Add session management middleware
+  4. Build the login UI component
+  5. Write integration tests
+
+Creating 5 tasks... Dispatching orchestrator...
+[Tasks 1-3 running in parallel]
+[Task 4 waiting for dependencies]
+...
+All 5 tasks complete. Tests passing. Here's what was built: [summary]
+```
+
+The setup wizard generates a `.claude/CLAUDE.md` file that teaches Claude how to be the coordinator for your installation. Just open Claude Code and start talking.
+
+See **[docs/COORDINATOR.md](docs/COORDINATOR.md)** for the full guide with examples.
+
+## Local LLM Support
+
+ForgeTeam supports running agents on local models via **Ollama**. Read-only roles (planner, evaluator, code-reviewer, security-reviewer, researcher) work well on local models. Developer and tester should stay on Claude for code quality.
+
+```bash
+# Install Ollama and pull a model
+ollama pull qwen3.5:27b
+
+# Configure in dispatch_config.json
+# provider_planner: "ollama"
+# provider_code_reviewer: "ollama"
+
+# Or force all agents to use Ollama
+python forge_orchestrator.py --task 42 --dev-test --provider ollama -y
+```
+
+See **[docs/LOCAL_LLM.md](docs/LOCAL_LLM.md)** for complete setup and configuration.
 
 ## Quick Start
 

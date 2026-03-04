@@ -36,14 +36,14 @@
     "forgesmith_project_id": 28,
     "rubric_definitions": {
         "developer": {
-            "result_success": 5.5,
+            "result_success": 13.0,
             "files_changed": 3,
             "tests_written": 3,
-            "turns_efficiency": 2.2,
+            "turns_efficiency": 2.0,
             "output_compliance": 2
         },
         "tester": {
-            "tests_pass": 5,
+            "tests_pass": 5.5,
             "edge_cases": 3,
             "coverage_meaningful": 2,
             "false_positives": -2
@@ -81,5 +81,13 @@
         "min_sample_size": 10,
         "evolution_lookback_days": 30
     },
-    "rubric_version": 2
+    "rubric_version": 12,
+    "opro": {
+        "enabled": true,
+        "model": "sonnet",
+        "timeout_seconds": 120,
+        "max_proposals_per_role": 3,
+        "min_runs_for_proposal": 5,
+        "min_predicted_improvement": 0.1
+    }
 }
