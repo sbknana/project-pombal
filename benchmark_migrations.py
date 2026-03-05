@@ -462,7 +462,7 @@ def _insert_v1_data(conn):
     artifacts = [
         (1, "db_migrate.py", "python",
          "def run_migrations(db_path): ...",
-         "Database migration runner", "REDACTED_LOCAL_PATH/Itzamna/db_migrate.py", "1.0"),
+         "Database migration runner", "REDACTED_LOCAL_PATH/ProjectPombal/db_migrate.py", "1.0"),
         (2, "pricing-engine.ts", "typescript",
          "export function calculatePrice(card: Card): number { ... }",
          "Dynamic card pricing", "src/lib/pricing-engine.ts", "0.1"),
@@ -938,7 +938,7 @@ def create_v3_database(path):
 def create_fresh_database(path):
     """Create a fresh database from schema.sql (the real install path).
 
-    This is how itzamna_setup.py creates new installations: execute the
+    This is how pombal_setup.py creates new installations: execute the
     full schema.sql which creates all 30 tables and sets user_version=3.
     Running migrations afterward should be a no-op.
     """
@@ -1094,7 +1094,7 @@ def run_benchmark(label, from_ver, to_ver, create_fn):
     result = BenchmarkResult(label, from_ver, to_ver)
 
     # Create temp DB
-    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False, prefix=f"itzamna_bench_v{from_ver}_")
+    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False, prefix=f"pombal_bench_v{from_ver}_")
     tmp_path = Path(tmp.name)
     tmp.close()
 

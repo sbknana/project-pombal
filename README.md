@@ -228,7 +228,7 @@ Claude picks the right agent automatically, but you can request specific ones:
 
 **1. Run the guided installer:**
 ```bash
-python itzamna_setup.py
+python pombal_setup.py
 ```
 
 **2. The installer handles everything:** prerequisites, database, config, MCP integration. Just answer the prompts.
@@ -319,7 +319,7 @@ You also need a **Claude Pro/Max subscription** or **Anthropic API key**.
 ```bash
 git clone <repo-url> forgeteam
 cd forgeteam
-python itzamna_setup.py
+python pombal_setup.py
 ```
 
 The installer walks you through: prerequisites check, database creation, config generation, MCP integration, and optional components (Sentinel monitoring, ForgeBot Discord bot).

@@ -35,7 +35,7 @@ Usage:
     python3 forge_arena.py --project chain-node
 
     # Run Project Pombal Python rewrite
-    python3 forge_arena.py --project itzamna
+    python3 forge_arena.py --project pombal
 
 Copyright 2026 Forgeborn
 """
@@ -74,9 +74,9 @@ PROJECT_PROFILES = {
         "dir": "",
         "language": "go",
     },
-    "itzamna": {
+    "pombal": {
         "id": 23,
-        "codename": "itzamna",
+        "codename": "pombal",
         "dir": "",
         "language": "python",
     },
@@ -1187,10 +1187,10 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 ]
 
 
-# --- ITZAMNA Python Rewrite Phases ---
+# --- POMBAL Python Rewrite Phases ---
 # Portable installer rewrite with best practices.
 
-ITZAMNA_PHASES = [
+POMBAL_PHASES = [
     {
         "id": 1,
         "name": "Foundation — CLI Framework, Config, Package Detection",
@@ -1198,7 +1198,7 @@ ITZAMNA_PHASES = [
 
 **Requirements:**
 1. Modern Python CLI using `click` (not argparse)
-2. Config via TOML (`itzamna.toml`) with schema validation via pydantic
+2. Config via TOML (`pombal.toml`) with schema validation via pydantic
 3. Package detection — scan system for: Python, Node.js, Docker, Git, Claude Code
 4. Cross-platform path handling (Windows + Linux + macOS)
 5. Rich terminal output via `rich` library (progress bars, tables, colored status)
@@ -1206,16 +1206,16 @@ ITZAMNA_PHASES = [
 7. Type hints on all functions (strict mypy)
 
 **Files:**
-- `src/itzamna/cli.py` — Click CLI entry point
-- `src/itzamna/config.py` — Pydantic config model + TOML loading
-- `src/itzamna/detect.py` — Package/tool detection
-- `src/itzamna/display.py` — Rich output helpers
+- `src/pombal/cli.py` — Click CLI entry point
+- `src/pombal/config.py` — Pydantic config model + TOML loading
+- `src/pombal/detect.py` — Package/tool detection
+- `src/pombal/display.py` — Rich output helpers
 - `pyproject.toml` — Project metadata, deps, scripts
 - `tests/` — pytest test suite
 
 **Acceptance criteria:**
-- `uv run itzamna --help` shows commands
-- `uv run itzamna detect` lists installed tools with versions
+- `uv run pombal --help` shows commands
+- `uv run pombal detect` lists installed tools with versions
 - Config loads from TOML with validation errors on bad input
 - Works on Windows and Linux
 """,
@@ -1344,7 +1344,7 @@ This is the CORE differentiator.
 PROJECT_PHASES = {
     "apocrypha": PHASES,
     "chain-node": BLOCK_NET_PHASES,
-    "itzamna": ITZAMNA_PHASES,
+    "pombal": POMBAL_PHASES,
     "babel": BABEL_PHASES,
 }
 

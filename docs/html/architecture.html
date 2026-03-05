@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ARCHITECTURE - Itzamna</title>
+  <title>ARCHITECTURE - Project Pombal</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -75,7 +75,7 @@
 </head>
 <body>
   <nav class="sidebar">
-    <div class="sidebar-header">Itzamna</div>
+    <div class="sidebar-header">Project Pombal</div>
     <a href="api.html" class="nav-item">API</a>
           <a href="architecture.html" class="nav-item active">ARCHITECTURE</a>
           <a href="concurrency.html" class="nav-item">CONCURRENCY</a>
@@ -91,11 +91,11 @@
           <a href="diagrams.html" class="nav-item">DIAGRAMS</a>
   </nav>
   <main class="content">
-    <h1>ARCHITECTURE.md — Itzamna (ForgeTeam)</h1>
+    <h1>ARCHITECTURE.md — Project Pombal (ForgeTeam)</h1>
 
 <h2>Table of Contents</h2>
 
-<ul><li><a href="#architecturemd-itzamna-forgeteam">ARCHITECTURE.md — Itzamna (ForgeTeam)</a></li>
+<ul><li><a href="#architecturemd-project-pombal-forgeteam">ARCHITECTURE.md — Project Pombal (ForgeTeam)</a></li>
 </ul>  - <a href="#how-it-works">How It Works</a>
   - <a href="#system-overview">System Overview</a>
   - <a href="#data-flow">Data Flow</a>
@@ -119,7 +119,7 @@
 
 <p>ForgeTeam is a multi-agent AI orchestration platform that coordinates AI agents (powered by Claude Code and optionally Ollama) to work on software development tasks. Here's how it works in plain English:</p>
 
-<strong>When you set up ForgeTeam</strong>, you run <code>itzamna_setup.py</code>, which walks you through a guided installation: checking prerequisites, choosing an install path, creating a SQLite database with all required tables, and generating configuration files. This is the "Itzamna" installer — the front door to the whole system.
+<strong>When you set up ForgeTeam</strong>, you run <code>pombal_setup.py</code>, which walks you through a guided installation: checking prerequisites, choosing an install path, creating a SQLite database with all required tables, and generating configuration files. This is the "Project Pombal" installer — the front door to the whole system.
 
 <strong>When you dispatch work</strong>, the <code>forge_orchestrator.py</code> scans your database for pending tasks, scores and prioritizes them, then dispatches them to specialized AI agent roles. The orchestrator runs a <strong>dev-test loop</strong>: a Developer agent writes code, then a Tester agent validates it, cycling back and forth until the task passes or the turn budget is exhausted. There's also a Security Reviewer role that can audit code. Each role gets a tailored system prompt, relevant lessons from past experiences, and episodic memory injected into its context.
 
@@ -139,7 +139,7 @@
 <h2>System Overview</h2>
 
 <div class="mermaid">graph TD
-    Setup[itzamna_setup.py&lt;br&gt;Guided Installer] --&gt;|Creates| DB[(SQLite Database)]
+    Setup[pombal_setup.py&lt;br&gt;Guided Installer] --&gt;|Creates| DB[(SQLite Database)]
     Setup --&gt;|Generates| Config[Config Files]
 
     CLI[User / CLI] --&gt;|dispatch / run| Orchestrator[forge_orchestrator.py&lt;br&gt;Task Orchestrator]
@@ -346,7 +346,7 @@
 <p>├── forgesmith_backfill.py        # Backfills episode data from historical logs</p>
 <p>├── forge_dashboard.py            # Terminal dashboard — task stats, project completion, activity</p>
 <p>├── forge_arena.py                # Adversarial testing arena — stress-tests agents, exports LoRA data</p>
-<p>├── itzamna_setup.py              # Guided installer — prerequisites, DB setup, config generation</p>
+<p>├── pombal_setup.py              # Guided installer — prerequisites, DB setup, config generation</p>
 <p>├── db_migrate.py                 # Database schema migrations (v0→v1→v2→v3)</p>
 <p>├── analyze_performance.py        # Performance reporting — completion rates, throughput, checkpoint analysis</p>
 <p>├── ollama_agent.py               # Local Ollama agent — sandboxed tool execution, file operations</p>
