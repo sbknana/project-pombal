@@ -1,7 +1,7 @@
--- Itzamna Database Schema
--- Canonical DDL for creating a fresh Itzamna/ForgeTeam database.
+-- Project Pombal Database Schema
+-- Canonical DDL for creating a fresh Project Pombal/ForgeTeam database.
 -- Generated from the live theforge.db schema.
--- Used by itzamna_setup.py to create new installations.
+-- Used by pombal_setup.py to create new installations.
 --
 -- Tables: 30, Views: 7, Triggers: 1, Indexes: 11
 

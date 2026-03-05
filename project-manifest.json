@@ -1430,7 +1430,7 @@
     },
     {
       "name": "print_header",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1439,7 +1439,7 @@
     },
     {
       "name": "print_step",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1449,7 +1449,7 @@
     },
     {
       "name": "prompt_input",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1459,7 +1459,7 @@
     },
     {
       "name": "prompt_yes_no",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1469,7 +1469,7 @@
     },
     {
       "name": "check_command",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1479,7 +1479,7 @@
     },
     {
       "name": "run_sql_file",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1489,7 +1489,7 @@
     },
     {
       "name": "count_db_objects",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1498,28 +1498,28 @@
     },
     {
       "name": "step_welcome",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": []
     },
     {
       "name": "step_prerequisites",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": []
     },
     {
       "name": "step_install_path",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": []
     },
     {
       "name": "step_database",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1528,7 +1528,7 @@
     },
     {
       "name": "step_copy_files",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1537,7 +1537,7 @@
     },
     {
       "name": "step_generate_config",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1547,14 +1547,14 @@
     },
     {
       "name": "_resolve_uvx_path",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": false,
       "async": false,
       "params": []
     },
     {
       "name": "step_generate_mcp_config",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1564,7 +1564,7 @@
     },
     {
       "name": "step_generate_dot_mcp",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1574,7 +1574,7 @@
     },
     {
       "name": "step_generate_claude_md",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1584,7 +1584,7 @@
     },
     {
       "name": "step_forgesmith_cron",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1593,21 +1593,21 @@
     },
     {
       "name": "_find_node_path",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": false,
       "async": false,
       "params": []
     },
     {
       "name": "_find_npx_path",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": false,
       "async": false,
       "params": []
     },
     {
       "name": "step_optional_sentinel",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1617,7 +1617,7 @@
     },
     {
       "name": "step_optional_forgebot",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1627,7 +1627,7 @@
     },
     {
       "name": "step_verify",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1639,7 +1639,7 @@
     },
     {
       "name": "step_next_steps",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": [
@@ -1651,7 +1651,7 @@
     },
     {
       "name": "main",
-      "file": "itzamna_setup.py",
+      "file": "pombal_setup.py",
       "exported": true,
       "async": false,
       "params": []
@@ -4394,8 +4394,8 @@
   "context": {
     "hasClaudeMd": true,
     "hasReadme": true,
-    "claudeMdSummary": "# CLAUDE.md — Itzamna\n\n## Project Overview\n\n**TheForge project_id:** 23\n**Status:** Active - v2.1 IMPLEMENTED\n\nItzamna is the portable installer and onboarding system for the ForgeTeam multi-agent orchestration platform. Named after the Mayan god of creation, writing, and knowledge, Itzamna makes ForgeTeam usable by anyone — not just the original developer.\n\n**What it does:**\n- Guided setup: prerequisites check, install path selection, DB creation\n...",
-    "readmeSummary": "<p align=\"center\">\r\n  <img src=\"ItzamnaIcon.png\" alt=\"ForgeTeam\" width=\"200\">\r\n</p>\r\n\r\n<h1 align=\"center\">ForgeTeam</h1>\r\n\r\n<p align=\"center\">\r\n  <strong>Multi-agent AI orchestrator for Claude Code</strong><br>\r\n  Zero dependencies. Persistent project memory. Dev+Test loops that actually work.\r\n</p>\r\n\r\n<p align=\"center\">\r\n  <em>Named after Itzamna, the Mayan god of creation, writing, and knowledge</em>\r\n</p>\r\n\r\n---\r\n\r\n..."
+    "claudeMdSummary": "# CLAUDE.md — Project Pombal\n\n## Project Overview\n\n**TheForge project_id:** 23\n**Status:** Active - v2.1 IMPLEMENTED\n\nProject Pombal is the portable installer and onboarding system for the ForgeTeam multi-agent orchestration platform. Named after the Marquis de Pombal, who coordinated the rebuilding of Lisbon after the 1755 earthquake, Project Pombal makes ForgeTeam usable by anyone — not just the original developer.\n\n**What it does:**\n- Guided setup: prerequisites check, install path selection, DB creation\n...",
+    "readmeSummary": "<p align=\"center\">\r\n  <img src=\"ProjectPombal.png\" alt=\"Project Pombal\" width=\"200\">\r\n</p>\r\n\r\n<h1 align=\"center\">Project Pombal</h1>\r\n\r\n<p align=\"center\">\r\n  <strong>Tell Claude what you want built. Agents do the rest.</strong><br>\r\n  Coordinate. Build. Ship.\r\n</p>\r\n\r\n<p align=\"center\">\r\n  <em>Named after the Marquis de Pombal, who coordinated the rebuilding of Lisbon after the 1755 earthquake</em>\r\n</p>\r\n\r\n---\r\n\r\n..."
   },
   "scannedAt": "2026-03-04T16:26:51.491Z",
   "athenaVersion": "1.0.0"
