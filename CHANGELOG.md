@@ -78,7 +78,7 @@ New keys in `dispatch_config.json`:
 ### Added
 
 - Initial release of Project Pombal — portable installer for Project Pombal
-- Interactive setup wizard (`itzamna_setup.py`)
+- Interactive setup wizard (`pombal_setup.py`)
 - Database schema (19 tables, 5 views)
 - Agent prompt files for all roles
 - Configuration file generation

@@ -13,7 +13,7 @@ Usage:
     # Standalone
     python db_migrate.py /path/to/theforge.db
 
-    # From itzamna_setup.py (called automatically)
+    # From pombal_setup.py (called automatically)
     from db_migrate import run_migrations
     success, from_ver, to_ver = run_migrations("/path/to/theforge.db")
 
