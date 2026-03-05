@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CONTRIBUTING - Itzamna</title>
+  <title>CONTRIBUTING - Project Pombal</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -75,7 +75,7 @@
 </head>
 <body>
   <nav class="sidebar">
-    <div class="sidebar-header">Itzamna</div>
+    <div class="sidebar-header">Project Pombal</div>
     <a href="api.html" class="nav-item">API</a>
           <a href="architecture.html" class="nav-item">ARCHITECTURE</a>
           <a href="concurrency.html" class="nav-item">CONCURRENCY</a>
@@ -91,11 +91,11 @@
           <a href="diagrams.html" class="nav-item">DIAGRAMS</a>
   </nav>
   <main class="content">
-    <h1>Contributing to Itzamna (ForgeTeam)</h1>
+    <h1>Contributing to Project Pombal (ForgeTeam)</h1>
 
 <h2>Table of Contents</h2>
 
-<ul><li><a href="#contributing-to-itzamna-forgeteam">Contributing to Itzamna (ForgeTeam)</a></li>
+<ul><li><a href="#contributing-to-project-pombal-forgeteam">Contributing to Project Pombal (ForgeTeam)</a></li>
 </ul>  - <a href="#welcome">Welcome</a>
   - <a href="#development-setup">Development Setup</a>
     - <a href="#prerequisites">Prerequisites</a>
@@ -130,7 +130,7 @@
 
 <h2>Welcome</h2>
 
-<p>Thank you for your interest in contributing to Itzamna! Whether you're fixing a bug, improving documentation, adding a new feature, or enhancing the multi-agent orchestration system, your contribution is valued. ForgeTeam is a community-driven project, and we're glad you're here.</p>
+<p>Thank you for your interest in contributing to Project Pombal! Whether you're fixing a bug, improving documentation, adding a new feature, or enhancing the multi-agent orchestration system, your contribution is valued. ForgeTeam is a community-driven project, and we're glad you're here.</p>
 
 <p>This guide will help you get set up and contributing effectively.</p>
 
@@ -140,7 +140,7 @@
 
 <h3>Prerequisites</h3>
 
-<p>Itzamna requires the following tools. The setup wizard (<code>itzamna_setup.py</code>) will verify most of these for you:</p>
+<p>Project Pombal requires the following tools. The setup wizard (<code>pombal_setup.py</code>) will verify most of these for you:</p>
 
 <ul><li><strong>Python 3.10+</strong></li>
 <li><strong>SQLite3</strong> (ships with Python, but the CLI tool is useful for debugging)</li>
@@ -151,13 +151,13 @@
 
 <p>1. <strong>Fork and clone the repository:</strong></p>
 
-   <pre><code class="language-bash">   git clone https://github.com/&lt;your-username&gt;/itzamna.git
-   cd itzamna
+   <pre><code class="language-bash">   git clone https://github.com/&lt;your-username&gt;/project-pombal.git
+   cd project-pombal
    </code></pre>
 
 <p>2. <strong>Run the setup wizard</strong> to initialize the database and configuration:</p>
 
-   <pre><code class="language-bash">   python itzamna_setup.py
+   <pre><code class="language-bash">   python pombal_setup.py
    </code></pre>
 
    This will walk you through prerequisites checks, install path selection, database creation, config generation, and optional components (Sentinel, ForgeBot).
@@ -187,7 +187,7 @@
 <tr><td><code>forge_dashboard.py</code></td><td>Performance dashboard</td></tr>
 <tr><td><code>analyze_performance.py</code></td><td>Performance analytics and reporting</td></tr>
 <tr><td><code>ollama_agent.py</code></td><td>Local Ollama model integration</td></tr>
-<tr><td><code>itzamna_setup.py</code></td><td>Guided installer/setup wizard</td></tr>
+<tr><td><code>pombal_setup.py</code></td><td>Guided installer/setup wizard</td></tr>
 <tr><td><code>db_migrate.py</code></td><td>Database schema migrations</td></tr>
 <tr><td><code>prepare_training_data.py</code></td><td>Training data preparation for fine-tuning</td></tr>
 <tr><td><code>train_qlora.py</code> / <code>train_qlora_peft.py</code></td><td>QLoRA fine-tuning scripts</td></tr>
@@ -319,7 +319,7 @@
 </ul>
 <h3>Test Patterns in This Project</h3>
 
-<p>Tests in Itzamna follow consistent patterns:</p>
+<p>Tests in Project Pombal follow consistent patterns:</p>
 
 <pre><code class="language-python">def test_your_feature():
     """Test that your feature does the expected thing."""
@@ -414,7 +414,7 @@
 
 <hr>
 
-<p>Thank you for contributing to Itzamna! Every improvement — whether it's a typo fix, a new test, or a major feature — helps make ForgeTeam better for everyone. 🏗️</p>
+<p>Thank you for contributing to Project Pombal! Every improvement — whether it's a typo fix, a new test, or a major feature — helps make ForgeTeam better for everyone. 🏗️</p>
 <hr>
 
 <h2>Related Documentation</h2>

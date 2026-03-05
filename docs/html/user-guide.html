@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>USER_GUIDE - Itzamna</title>
+  <title>USER_GUIDE - Project Pombal</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -75,7 +75,7 @@
 </head>
 <body>
   <nav class="sidebar">
-    <div class="sidebar-header">Itzamna</div>
+    <div class="sidebar-header">Project Pombal</div>
     <a href="api.html" class="nav-item">API</a>
           <a href="architecture.html" class="nav-item">ARCHITECTURE</a>
           <a href="concurrency.html" class="nav-item">CONCURRENCY</a>
@@ -125,8 +125,8 @@
 </table>
 <h3>Running the Installer</h3>
 
-<pre><code class="language-bash">cd Itzamna
-<p>python itzamna_setup.py</p>
+<pre><code class="language-bash">cd Project Pombal
+<p>python pombal_setup.py</p>
 </code></pre>
 
 <p>The wizard guides you through:</p>
@@ -651,7 +651,7 @@
 <p>1. <strong>Agent MCP</strong> (<code>mcp_config.json</code>) — passed to orchestrator-spawned agents so they can access the database</p>
 <p>2. <strong>User MCP</strong> (<code>.mcp.json</code>) — gives your own Claude Code sessions direct database access</p>
 
-<p>Both are generated automatically by the Itzamna setup wizard.</p>
+<p>Both are generated automatically by the Project Pombal setup wizard.</p>
 
 <h3>How Agent MCP Works</h3>
 
@@ -674,7 +674,7 @@
 
 <pre><code class="language-json">{
     "mcpServers": {
-        "itzamna": {
+        "pombal": {
             "type": "stdio",
             "command": "uvx",
             "args": ["mcp-server-sqlite", "--db-path", "/path/to/theforge.db"]
@@ -813,7 +813,7 @@
 
 <p>This is informational, not an error. Without a config file, the orchestrator uses its hardcoded defaults.</p>
 
-<strong>Fix:</strong> Run <code>itzamna_setup.py</code> to generate the config file, or create one manually (see Configuration Reference above).
+<strong>Fix:</strong> Run <code>pombal_setup.py</code> to generate the config file, or create one manually (see Configuration Reference above).
 
 <h3>Agent produces no output</h3>
 
