@@ -5619,6 +5619,7 @@ async def run_parallel_tasks(task_ids, args):
             log(f"[Task #{task['id']}] Done: {outcome} ({cycles} cycles)", output)
 
             # Merge worktree changes back to main branch
+            merge_ok = False
             if task["id"] in worktree_dirs and outcome in ("tests_passed", "no_tests"):
                 try:
                     wt_path = worktree_dirs[task["id"]]
@@ -5630,9 +5631,12 @@ async def run_parallel_tasks(task_ids, args):
                     )
                     if merge_result.returncode == 0:
                         log(f"  [Isolation] Merged task #{task['id']} changes back to main", output)
+                        merge_ok = True
                     else:
-                        log(f"  [Isolation] Merge conflict for task #{task['id']}: "
+                        log(f"  [Isolation] Merge FAILED for task #{task['id']}: "
                             f"{merge_result.stderr[:200]}", output)
+                        log(f"  [Isolation] Branch 'forge-task-{task['id']}' PRESERVED — "
+                            f"manually merge or redispatch", output)
                         # Abort the merge on conflict
                         subprocess.run(["git", "merge", "--abort"],
                                        cwd=project_dir, capture_output=True)
@@ -5645,6 +5649,7 @@ async def run_parallel_tasks(task_ids, args):
                 "cycles": cycles,
                 "outcome": outcome,
                 "output": output,
+                "merge_ok": merge_ok,
             }
 
     results = await asyncio.gather(
@@ -5693,15 +5698,29 @@ async def run_parallel_tasks(task_ids, args):
         print(f"Cost: ${total_cost:.4f}")
     print(f"{'#' * 60}")
 
-    # Clean up worktrees
+    # Clean up worktrees — only delete branches that were successfully merged
     if use_worktrees:
+        # Collect merge status from results
+        merged_tasks = set()
+        for r in results:
+            if isinstance(r, Exception):
+                continue
+            if r.get("merge_ok"):
+                merged_tasks.add(r["task"]["id"])
+
         for task_id, wt_path in worktree_dirs.items():
             try:
                 branch_name = f"forge-task-{task_id}"
+                # Always remove the worktree directory (it's a working copy)
                 subprocess.run(["git", "worktree", "remove", "--force", wt_path],
                                cwd=project_dir, capture_output=True)
-                subprocess.run(["git", "branch", "-D", branch_name],
-                               cwd=project_dir, capture_output=True)
+                if task_id in merged_tasks:
+                    # Branch was merged — safe to delete
+                    subprocess.run(["git", "branch", "-D", branch_name],
+                                   cwd=project_dir, capture_output=True)
+                else:
+                    # Branch was NOT merged — PRESERVE it so work isn't lost
+                    print(f"  [Isolation] Keeping branch '{branch_name}' (unmerged work)")
             except Exception:
                 pass
         # Clean up worktree base dir if empty
