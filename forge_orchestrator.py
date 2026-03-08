@@ -197,6 +197,16 @@ BUDGET_CHECK_INTERVAL = 5    # inject budget message every N turns
 BUDGET_HALFWAY_THRESHOLD = 0.5   # fraction of budget used to trigger HALFWAY warning
 BUDGET_CRITICAL_THRESHOLD = 0.75  # fraction of budget used to trigger CRITICAL warning
 
+# Cost-based circuit breaker: terminate tasks that exceed cost limits
+# Default limits per complexity tier (in USD). Configurable via dispatch_config "cost_limits".
+COST_LIMITS = {
+    "simple": 3.0,
+    "medium": 5.0,
+    "complex": 10.0,
+    "epic": 20.0,
+}
+COST_ESTIMATE_PER_TURN = 0.15  # estimated cost per turn when actual cost is None (killed runs)
+
 # Manager mode constants (Phase 3)
 MAX_MANAGER_ROUNDS = 3       # max plan-execute-evaluate rounds
 MAX_TASKS_PER_PLAN = 8       # planner can't create more than this
@@ -2609,6 +2619,39 @@ def _get_budget_message(turn_count, max_turns):
         )
 
 
+def _check_cost_limit(total_cost, complexity, config_limits=None):
+    """Check if total accumulated cost exceeds the limit for the given complexity tier.
+
+    Cost limits scale per task complexity:
+    - simple: $3.00 (default)
+    - medium: $5.00 (default)
+    - complex: $10.00 (default)
+    - epic: $20.00 (default)
+
+    Limits can be overridden via dispatch_config "cost_limits" dict.
+
+    Args:
+        total_cost: Total cost accumulated so far (in USD). None treated as $0.00.
+        complexity: Task complexity tier ('simple', 'medium', 'complex', 'epic').
+        config_limits: Optional dict overriding COST_LIMITS values from dispatch_config.
+
+    Returns:
+        str: Termination reason if cost exceeded, or None if within budget.
+    """
+    if total_cost is None or total_cost <= 0:
+        return None
+
+    # Resolve the limit: config override > default constants
+    limits = config_limits if config_limits else COST_LIMITS
+    # Default to $10.00 for unknown complexity tiers
+    limit = limits.get(complexity, 10.0)
+
+    if total_cost > limit:
+        return f"Cost limit exceeded: ${total_cost:.2f} > ${limit:.2f}"
+
+    return None
+
+
 def _parse_early_complete(text):
     """Parse an EARLY_COMPLETE: <reason> signal from agent text.
 
@@ -3822,6 +3865,10 @@ async def run_dev_test_loop(task, project_dir, project_context, args, output=Non
     last_error_type = None   # track last error for lesson injection
     loop_detector = LoopDetector()  # detect repeated failing patterns
 
+    # Load cost limits from dispatch config (overrides defaults in COST_LIMITS)
+    dispatch_config = getattr(args, "dispatch_config", None) if args else None
+    config_cost_limits = (dispatch_config or {}).get("cost_limits")
+
     # Reset status so orchestrator is authoritative
     conn = get_db_connection(write=True)
     conn.execute("UPDATE tasks SET status = 'in_progress' WHERE id = ?", (task_id,))
@@ -3842,7 +3889,10 @@ async def run_dev_test_loop(task, project_dir, project_context, args, output=Non
     dev_turns_allocated, _ = calculate_dynamic_budget(dev_turns_max)
     tester_turns_allocated, _ = calculate_dynamic_budget(tester_turns_max)
 
+    # Resolve cost limit for this complexity tier
+    effective_cost_limit = (config_cost_limits or COST_LIMITS).get(complexity, 10.0)
     log(f"  Task complexity: {complexity}", output)
+    log(f"  Cost limit: ${effective_cost_limit:.2f} ({complexity})", output)
     log(f"  Developer: model={dev_model}, budget={dev_turns_allocated}/{dev_turns_max} "
         f"(dynamic, min={DYNAMIC_BUDGET_MIN_TURNS})", output)
     log(f"  Tester: model={tester_model}, budget={tester_turns_allocated}/{tester_turns_max} "
@@ -3918,11 +3968,31 @@ async def run_dev_test_loop(task, project_dir, project_context, args, output=Non
         total_duration += dev_result.get("duration", 0)
         if dev_result.get("cost"):
             total_cost += dev_result["cost"]
+        elif dev_result.get("num_turns"):
+            # Estimate cost for killed/failed runs where actual cost is None
+            estimated = dev_result["num_turns"] * COST_ESTIMATE_PER_TURN
+            total_cost += estimated
+            log(f"  [Cycle {cycle}] Developer cost=None, estimating "
+                f"${estimated:.2f} ({dev_result['num_turns']} turns * "
+                f"${COST_ESTIMATE_PER_TURN})", output)
+
+        # Cost-based circuit breaker: terminate if accumulated cost exceeds limit
+        cost_reason = _check_cost_limit(total_cost, complexity, config_cost_limits)
+        if cost_reason:
+            log(f"  [Cycle {cycle}] {cost_reason}", output)
+            loop_detector.record(dev_result, cycle)
+            dev_result["cost"] = total_cost
+            dev_result["duration"] = total_duration
+            dev_result["early_terminated"] = True
+            dev_result["early_term_reason"] = cost_reason
+            return dev_result, cycle, "cost_limit_exceeded"
 
         # Check for early termination
         if dev_result.get("early_terminated"):
             reason = dev_result.get("early_term_reason", "unknown")
             log(f"  [Cycle {cycle}] Developer early-terminated: {reason}", output)
+            # Cohesion: record early termination so loop detector sees it for cross-cycle learning
+            loop_detector.record(dev_result, cycle)
             return dev_result, cycle, "early_terminated"
 
         # Check for agent-initiated early completion (agent chose to stop)
@@ -4090,6 +4160,23 @@ async def run_dev_test_loop(task, project_dir, project_context, args, output=Non
         total_duration += tester_result.get("duration", 0)
         if tester_result.get("cost"):
             total_cost += tester_result["cost"]
+        elif tester_result.get("num_turns"):
+            # Estimate cost for killed/failed tester runs where actual cost is None
+            estimated = tester_result["num_turns"] * COST_ESTIMATE_PER_TURN
+            total_cost += estimated
+            log(f"  [Cycle {cycle}] Tester cost=None, estimating "
+                f"${estimated:.2f} ({tester_result['num_turns']} turns * "
+                f"${COST_ESTIMATE_PER_TURN})", output)
+
+        # Cost-based circuit breaker after tester phase
+        cost_reason = _check_cost_limit(total_cost, complexity, config_cost_limits)
+        if cost_reason:
+            log(f"  [Cycle {cycle}] {cost_reason} (after tester)", output)
+            tester_result["cost"] = total_cost
+            tester_result["duration"] = total_duration
+            tester_result["early_terminated"] = True
+            tester_result["early_term_reason"] = cost_reason
+            return tester_result, cycle, "cost_limit_exceeded"
 
         # Check for early termination (stuck tester)
         # Tester early-termination = treat as no-tests, accept developer work
