@@ -83,6 +83,28 @@ INSERT INTO decisions (project_id, topic, decision, rationale, alternatives_cons
 VALUES ({project_id}, 'Topic area', 'What you decided', 'Why', 'Other options considered');
 ```
 
+## Early Completion Signal
+
+If you finish your task before using all your turns, you can signal early completion to avoid burning remaining budget. Output this marker on its own line (NOT inside a code block or quote):
+
+```
+EARLY_COMPLETE: <reason>
+```
+
+**When to use:**
+- Task is already implemented and you verified it — `EARLY_COMPLETE: No changes needed, feature already exists`
+- You finished all work and committed — `EARLY_COMPLETE: All changes committed and tests pass`
+- Task requires no code changes — `EARLY_COMPLETE: Task already complete, no modifications needed`
+
+**When NOT to use:**
+- You are stuck or blocked (use `RESULT: blocked` in your output instead)
+- You still have work to do but are running low on turns (just produce your output block)
+- You haven't verified your work yet (run tests/build first)
+
+The orchestrator will let your current message finish, then stop the run gracefully. Cost is still tracked. If you signal "no changes needed", the tester phase will be skipped.
+
+**Important:** EARLY_COMPLETE is distinct from your final RESULT block. You can use both — signal early completion, then immediately output your structured RESULT block in the same message.
+
 ## Output Requirements
 
 Your output **MUST** end with a structured summary block. The orchestrator parses this to track your progress. If you do not include it, the orchestrator cannot tell whether you made changes.

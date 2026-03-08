@@ -2544,6 +2544,56 @@ def _check_monologue(consecutive_text_only_turns, turn_count):
     return None
 
 
+def _parse_early_complete(text):
+    """Parse an EARLY_COMPLETE: <reason> signal from agent text.
+
+    Agents can signal "I am done" mid-run to avoid burning remaining turns.
+    The marker must appear at the start of a line (not inside code blocks,
+    inline code, quoted blocks, or string literals).
+
+    Returns the reason string if found, or None.
+    """
+    if "EARLY_COMPLETE:" not in text:
+        return None
+
+    # Check if we're inside a code block (triple backticks)
+    in_code_block = False
+    for line in text.splitlines():
+        stripped = line.strip()
+
+        # Toggle code block state on triple-backtick lines
+        if stripped.startswith("```"):
+            in_code_block = not in_code_block
+            continue
+
+        if in_code_block:
+            continue
+
+        # Skip quoted blocks (> prefix)
+        if stripped.startswith(">"):
+            continue
+
+        # Skip lines where EARLY_COMPLETE appears inside inline code (`...`)
+        if "EARLY_COMPLETE:" in stripped:
+            # Check if it's inside backticks on this line
+            before_marker = stripped.split("EARLY_COMPLETE:")[0]
+            # Count backticks before the marker — odd count means inside inline code
+            if before_marker.count("`") % 2 == 1:
+                continue
+
+            # Check if it's inside double quotes
+            if before_marker.count('"') % 2 == 1:
+                continue
+
+            # Valid EARLY_COMPLETE: marker — extract reason
+            idx = stripped.index("EARLY_COMPLETE:")
+            reason = stripped[idx + len("EARLY_COMPLETE:"):].strip()
+            if reason:
+                return reason
+
+    return None
+
+
 def _compute_output_hash(content):
     """Compute a SHA256 hash of tool result content for loop detection.
 
@@ -2733,6 +2783,8 @@ async def run_agent_streaming(cmd, role="developer", timeout=None, output=None,
     loop_warning_injected = False  # track if we've warned about loop detection
     early_term_reason = None
     loop_detected_details = None  # store loop details for error_summary
+    agent_signaled_done = False    # agent-initiated early completion (EARLY_COMPLETE:)
+    early_complete_reason = None   # reason provided by agent for early completion
 
     try:
         process = await asyncio.create_subprocess_exec(
@@ -2806,6 +2858,16 @@ async def run_agent_streaming(cmd, role="developer", timeout=None, output=None,
                     if block_type == "text":
                         text = block.get("text", "")
                         all_text_chunks.append(text)
+
+                        # Check for agent-initiated early completion signal
+                        ec_reason = _parse_early_complete(text)
+                        if ec_reason and not agent_signaled_done:
+                            agent_signaled_done = True
+                            early_complete_reason = ec_reason
+                            log(f"  [EarlyComplete] Agent signaled done at turn "
+                                f"~{turn_count}: {ec_reason}", output)
+                            # Do NOT break here — let the current assistant
+                            # message finish (all content blocks processed)
 
                         # Check for stuck phrases
                         matched = _check_stuck_phrases(text)
@@ -2956,6 +3018,13 @@ async def run_agent_streaming(cmd, role="developer", timeout=None, output=None,
                 if early_term_reason:
                     break
 
+                # If agent signaled early completion, break after this
+                # assistant message is fully processed (all content blocks done)
+                if agent_signaled_done:
+                    log(f"  [EarlyComplete] Current message processed, "
+                        f"stopping stream.", output)
+                    break
+
             # --- Handle "user" messages (tool results) ---
             elif msg_type == "user":
                 message = msg.get("message", {})
@@ -3046,6 +3115,13 @@ async def run_agent_streaming(cmd, role="developer", timeout=None, output=None,
         result["early_terminated"] = True
         result["early_term_reason"] = early_term_reason
 
+    # Agent-initiated early completion (distinct from early_terminated)
+    # early_completed = agent CHOSE to stop (success)
+    # early_terminated = orchestrator FORCED agent to stop (failure)
+    if agent_signaled_done and not early_term_reason:
+        result["early_completed"] = True
+        result["early_complete_reason"] = early_complete_reason
+
     # If we got the final result message from stream-json, use it
     if result_data:
         final_text = result_data.get("result", "")
@@ -3068,6 +3144,11 @@ async def run_agent_streaming(cmd, role="developer", timeout=None, output=None,
                 f"Agent error: {result_data.get('result', 'unknown')}")
         else:
             result["success"] = not bool(early_term_reason)
+    elif agent_signaled_done and not early_term_reason:
+        # Agent signaled done but process didn't emit a result message.
+        # Use accumulated text and treat as success — the agent chose to stop.
+        result["result_text"] = "\n".join(all_text_chunks)
+        result["success"] = True
     else:
         # No result message — build text from accumulated chunks
         result["result_text"] = "\n".join(all_text_chunks)
@@ -3771,6 +3852,29 @@ async def run_dev_test_loop(task, project_dir, project_context, args, output=Non
             reason = dev_result.get("early_term_reason", "unknown")
             log(f"  [Cycle {cycle}] Developer early-terminated: {reason}", output)
             return dev_result, cycle, "early_terminated"
+
+        # Check for agent-initiated early completion (agent chose to stop)
+        if dev_result.get("early_completed"):
+            ec_reason = dev_result.get("early_complete_reason", "")
+            log(f"  [Cycle {cycle}] Developer signaled early completion: "
+                f"{ec_reason}", output)
+            # Skip tester if agent says no changes were needed
+            no_changes_phrases = [
+                "no changes needed", "no changes required",
+                "no modifications needed", "nothing to change",
+                "already implemented", "already exists",
+                "no work needed", "task already complete",
+            ]
+            if any(phrase in ec_reason.lower() for phrase in no_changes_phrases):
+                log(f"  [Cycle {cycle}] Skipping tester — agent reported no "
+                    f"changes needed.", output)
+                clear_checkpoints(task_id)
+                dev_result["cost"] = total_cost
+                dev_result["duration"] = total_duration
+                return dev_result, cycle, "early_completed_no_changes"
+            # Otherwise, agent completed with changes — run tester as normal
+            log(f"  [Cycle {cycle}] Agent completed early with changes — "
+                f"proceeding to tester.", output)
 
         # Check for timeout or max_turns — save checkpoint for resume
         is_timeout = any("timed out" in e for e in dev_result.get("errors", []))
