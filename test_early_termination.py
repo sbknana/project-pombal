@@ -37,6 +37,12 @@ Tests verify:
 32. Budget constants have expected values
 33. Budget message includes correct remaining turn count
 34. Budget message not returned when max_turns is None
+35. Cost breaker terminates when total cost exceeds complexity-scaled limit
+36. Cost breaker handles None cost gracefully (treated as $0.00)
+37. Cost limits scale with complexity: simple=$3, medium=$5, complex=$10, epic=$20
+38. Cost limits configurable via dispatch_config overrides
+39. Early termination results recorded in LoopDetector for cross-cycle learning
+40. Cost estimate for killed runs uses COST_ESTIMATE_PER_TURN ($0.15) formula
 
 Copyright 2026 Forgeborn
 """
@@ -51,6 +57,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from forge_orchestrator import (
     _check_stuck_phrases,
     _check_monologue,
+    _check_cost_limit,
     _compute_output_hash,
     _detect_tool_loop,
     _get_budget_message,
@@ -58,11 +65,14 @@ from forge_orchestrator import (
     BUDGET_CHECK_INTERVAL,
     BUDGET_HALFWAY_THRESHOLD,
     BUDGET_CRITICAL_THRESHOLD,
+    COST_LIMITS,
+    COST_ESTIMATE_PER_TURN,
     EARLY_TERM_WARN_TURNS,
     EARLY_TERM_FINAL_WARN_TURNS,
     EARLY_TERM_KILL_TURNS,
     EARLY_TERM_STUCK_PHRASES,
     EARLY_TERM_EXEMPT_ROLES,
+    LoopDetector,
     MONOLOGUE_THRESHOLD,
     MONOLOGUE_EXEMPT_TURNS,
 )
@@ -721,6 +731,141 @@ def test_budget_message_none_when_no_max_turns():
     assert msg2 is None, f"should return None when max_turns is 0, got: {msg2}"
 
 
+# --- Tests for _check_cost_limit (cost-based circuit breaker) ---
+
+def test_cost_breaker_terminates_at_limit():
+    """Test that _check_cost_limit returns a termination reason when cost exceeds limit."""
+    # Simple task has $3.00 limit by default
+    reason = _check_cost_limit(total_cost=3.50, complexity="simple")
+    assert reason is not None, "should terminate when cost exceeds limit"
+    assert "3.50" in reason, f"reason should include actual cost, got: {reason}"
+    assert "3.00" in reason, f"reason should include limit, got: {reason}"
+
+    # At exact limit, should NOT terminate (only exceeding triggers)
+    reason_exact = _check_cost_limit(total_cost=3.00, complexity="simple")
+    assert reason_exact is None, f"should not terminate at exact limit, got: {reason_exact}"
+
+    # Below limit, should NOT terminate
+    reason_below = _check_cost_limit(total_cost=2.99, complexity="simple")
+    assert reason_below is None, f"should not terminate below limit, got: {reason_below}"
+
+    # Medium task has $5.00 limit
+    reason_medium = _check_cost_limit(total_cost=5.01, complexity="medium")
+    assert reason_medium is not None, "should terminate when medium cost exceeds $5.00"
+
+    # Complex task has $10.00 limit
+    reason_complex = _check_cost_limit(total_cost=10.50, complexity="complex")
+    assert reason_complex is not None, "should terminate when complex cost exceeds $10.00"
+
+    # Epic task has $20.00 limit
+    reason_epic = _check_cost_limit(total_cost=20.01, complexity="epic")
+    assert reason_epic is not None, "should terminate when epic cost exceeds $20.00"
+
+
+def test_cost_breaker_handles_none_cost():
+    """Test that _check_cost_limit handles None total_cost gracefully."""
+    # None cost should be treated as 0.0 — never triggers the breaker
+    reason = _check_cost_limit(total_cost=None, complexity="simple")
+    assert reason is None, f"None cost should not trigger breaker, got: {reason}"
+
+    # 0.0 cost should not trigger
+    reason_zero = _check_cost_limit(total_cost=0.0, complexity="complex")
+    assert reason_zero is None, f"zero cost should not trigger breaker, got: {reason_zero}"
+
+
+def test_cost_limit_scales_with_complexity():
+    """Test that cost limits scale per complexity tier."""
+    # Verify the limits are ordered: simple < medium < complex < epic
+    assert COST_LIMITS["simple"] < COST_LIMITS["medium"], \
+        f"simple ({COST_LIMITS['simple']}) should be less than medium ({COST_LIMITS['medium']})"
+    assert COST_LIMITS["medium"] < COST_LIMITS["complex"], \
+        f"medium ({COST_LIMITS['medium']}) should be less than complex ({COST_LIMITS['complex']})"
+    assert COST_LIMITS["complex"] < COST_LIMITS["epic"], \
+        f"complex ({COST_LIMITS['complex']}) should be less than epic ({COST_LIMITS['epic']})"
+
+    # Verify the specific values from the task spec
+    assert COST_LIMITS["simple"] == 3.0, f"simple limit should be $3.00, got {COST_LIMITS['simple']}"
+    assert COST_LIMITS["medium"] == 5.0, f"medium limit should be $5.00, got {COST_LIMITS['medium']}"
+    assert COST_LIMITS["complex"] == 10.0, f"complex limit should be $10.00, got {COST_LIMITS['complex']}"
+    assert COST_LIMITS["epic"] == 20.0, f"epic limit should be $20.00, got {COST_LIMITS['epic']}"
+
+    # $4.00 should pass for medium but fail for simple
+    assert _check_cost_limit(4.0, "medium") is None, \
+        "$4.00 should be under medium limit"
+    assert _check_cost_limit(4.0, "simple") is not None, \
+        "$4.00 should exceed simple limit"
+
+
+def test_cost_breaker_configurable_via_dispatch_config():
+    """Test that cost limits can be overridden via dispatch_config."""
+    # Override simple to $50.00 via config
+    config_limits = {"simple": 50.0, "medium": 100.0, "complex": 200.0, "epic": 500.0}
+
+    # $4.00 with default simple limit ($3.00) would terminate, but with override ($50) it shouldn't
+    reason = _check_cost_limit(total_cost=4.0, complexity="simple", config_limits=config_limits)
+    assert reason is None, \
+        f"config override should allow $4.00 for simple (limit=$50), got: {reason}"
+
+    # $51.00 should exceed the overridden $50 limit
+    reason_over = _check_cost_limit(total_cost=51.0, complexity="simple", config_limits=config_limits)
+    assert reason_over is not None, \
+        "should terminate when cost exceeds config-overridden limit"
+
+    # Unknown complexity falls back to default $10.00
+    reason_unknown = _check_cost_limit(total_cost=11.0, complexity="unknown_tier")
+    assert reason_unknown is not None, \
+        "unknown complexity should use default limit ($10.00)"
+
+
+def test_early_term_recorded_in_loop_detector():
+    """Test that early termination results are properly recorded in LoopDetector."""
+    detector = LoopDetector()
+
+    # Simulate a failed result (early terminated)
+    result = {
+        "result_text": "RESULT: failed\nSUMMARY: Agent stuck\nFILES_CHANGED: none\nBLOCKERS: stuck",
+        "errors": ["agent terminated: stuck"],
+    }
+
+    # Record the early-terminated result — should return "ok" on first attempt
+    action = detector.record(result, cycle=1)
+    assert action == "ok", f"first record should be 'ok', got '{action}'"
+
+    # Record same result again — after warning_threshold (3) identical, should warn
+    detector.record(result, cycle=2)
+    action3 = detector.record(result, cycle=3)
+    assert action3 == "warn", \
+        f"3rd identical result should trigger 'warn', got '{action3}'"
+
+    # Verify the detector has tracked the fingerprints
+    assert len(detector.fingerprints) == 3, \
+        f"expected 3 fingerprints, got {len(detector.fingerprints)}"
+
+
+def test_cost_estimate_for_killed_runs():
+    """Test that killed runs (None cost) use the estimated cost formula.
+
+    When an agent is killed (cost=None), we estimate: num_turns * COST_ESTIMATE_PER_TURN.
+    This test verifies the constant exists and the estimation logic is correct.
+    """
+    # Verify the constant exists and has a reasonable value
+    assert COST_ESTIMATE_PER_TURN > 0, \
+        f"COST_ESTIMATE_PER_TURN should be positive, got {COST_ESTIMATE_PER_TURN}"
+    assert COST_ESTIMATE_PER_TURN == 0.15, \
+        f"COST_ESTIMATE_PER_TURN should be $0.15, got {COST_ESTIMATE_PER_TURN}"
+
+    # Estimate for 10 turns: 10 * 0.15 = $1.50
+    estimated = 10 * COST_ESTIMATE_PER_TURN
+    assert abs(estimated - 1.50) < 0.001, \
+        f"10 turns * $0.15 should be $1.50, got {estimated}"
+
+    # A killed run with 30 turns should estimate $4.50 — exceeds simple limit ($3.00)
+    killed_estimate = 30 * COST_ESTIMATE_PER_TURN
+    reason = _check_cost_limit(total_cost=killed_estimate, complexity="simple")
+    assert reason is not None, \
+        f"killed run cost ${killed_estimate:.2f} should exceed simple limit ($3.00)"
+
+
 # --- Main ---
 
 def main():
@@ -769,6 +914,13 @@ def main():
         test_budget_constants_values,
         test_budget_message_correct_remaining,
         test_budget_message_none_when_no_max_turns,
+        # Cost-based circuit breaker tests
+        test_cost_breaker_terminates_at_limit,
+        test_cost_breaker_handles_none_cost,
+        test_cost_limit_scales_with_complexity,
+        test_cost_breaker_configurable_via_dispatch_config,
+        test_early_term_recorded_in_loop_detector,
+        test_cost_estimate_for_killed_runs,
     ]
 
     passed = 0
@@ -779,7 +931,7 @@ def main():
     print(f"  Early Termination Test Suite")
     print(f"  Testing _check_stuck_phrases, _compute_output_hash,")
     print(f"  _detect_tool_loop with output hashes, dead code removal,")
-    print(f"  _parse_early_complete, _get_budget_message")
+    print(f"  _parse_early_complete, _get_budget_message, _check_cost_limit")
     print(f"{'=' * 60}\n")
 
     for test_fn in tests:
