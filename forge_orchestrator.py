@@ -169,9 +169,9 @@ MAX_CONTINUATIONS = 3            # auto-retries when developer runs out of turns
 
 # Early termination: detect stuck agents mid-run and kill before wasting turns
 # Escalating warnings: first warning → final warning → kill
-EARLY_TERM_WARN_TURNS = 8        # turns with no Edit/Write before first warning
-EARLY_TERM_FINAL_WARN_TURNS = 12 # turns with no Edit/Write before final warning
-EARLY_TERM_KILL_TURNS = 15       # turns with no Edit/Write before killing agent
+EARLY_TERM_WARN_TURNS = 12        # turns with no Edit/Write before first warning
+EARLY_TERM_FINAL_WARN_TURNS = 18 # turns with no Edit/Write before final warning
+EARLY_TERM_KILL_TURNS = 22       # turns with no Edit/Write before killing agent
 EARLY_TERM_STUCK_PHRASES = [
     "i am unable to",
     "i cannot",
@@ -186,6 +186,10 @@ EARLY_TERM_STUCK_PHRASES = [
 ]
 # Roles that legitimately produce no file changes (research/planning tasks)
 EARLY_TERM_EXEMPT_ROLES = {"planner", "evaluator", "security-reviewer", "code-reviewer", "researcher"}
+
+# Monologue detection: consecutive assistant messages with zero tool calls
+MONOLOGUE_THRESHOLD = 3      # terminate after this many text-only turns in a row
+MONOLOGUE_EXEMPT_TURNS = 5   # do not trigger during first N turns (agent may be planning)
 
 # Manager mode constants (Phase 3)
 MAX_MANAGER_ROUNDS = 3       # max plan-execute-evaluate rounds
@@ -2520,29 +2524,78 @@ def _check_stuck_phrases(text):
     return None
 
 
-def _check_repeated_tool_calls(tool_history, window=4):
-    """Detect repeated identical tool calls within a sliding window.
+def _check_monologue(consecutive_text_only_turns, turn_count):
+    """Check if the agent is monologuing (consecutive text-only messages without tool use).
 
-    Returns True if the last `window` tool calls are all identical.
+    Returns:
+        "terminate" if consecutive_text_only_turns >= MONOLOGUE_THRESHOLD and past exempt period.
+        "warn" if consecutive_text_only_turns == MONOLOGUE_THRESHOLD - 1 and past exempt period.
+        None otherwise.
     """
-    if len(tool_history) < window:
-        return False
-    recent = tool_history[-window:]
-    return len(set(recent)) == 1
+    # Do not trigger during the initial planning period
+    if turn_count <= MONOLOGUE_EXEMPT_TURNS:
+        return None
+
+    if consecutive_text_only_turns >= MONOLOGUE_THRESHOLD:
+        return "terminate"
+    elif consecutive_text_only_turns == MONOLOGUE_THRESHOLD - 1:
+        return "warn"
+
+    return None
 
 
-def _detect_tool_loop(tool_history, tool_errors, warn_threshold=3, terminate_threshold=5):
+def _compute_output_hash(content):
+    """Compute a SHA256 hash of tool result content for loop detection.
+
+    Handles all content formats from Claude stream-json: string, list of
+    content blocks, None, or empty values. Returns a 64-char hex digest.
+
+    Args:
+        content: Tool result content — str, list of content blocks, or None.
+
+    Returns:
+        str: SHA256 hex digest of the normalized content.
+    """
+    if content is None:
+        text = ""
+    elif isinstance(content, str):
+        text = content
+    elif isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        text = " ".join(parts) if parts else ""
+    else:
+        text = str(content)
+    return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()
+
+
+def _detect_tool_loop(tool_history, tool_errors, warn_threshold=3,
+                      terminate_threshold=5, tool_output_hashes=None):
     """Detect when an agent repeats the same failing tool operation.
 
-    Tracks consecutive repetitions of the same tool signature and returns
-    the current loop status. Enhanced to consider error patterns - only
-    triggers on failed operations, not successful ones.
+    Detects two patterns:
+    1. Consecutive: Same tool signature repeated (A-A-A-A)
+    2. Alternating: Two-tool cycle repeated (A-B-A-B-A-B)
+
+    Enhanced to consider error patterns — only triggers on failed operations,
+    not successful ones.
+
+    When tool_output_hashes is provided, uses output hash matching to
+    distinguish true stuck loops (same input AND same output) from retries
+    after external state changes (same input but different output). When
+    consecutive calls have identical output hashes, the effective thresholds
+    are halved because identical output is strong confirmation the agent
+    is stuck in a deterministic loop.
 
     Args:
         tool_history: List of tool signatures (tool_name|params)
         tool_errors: List of error summaries (None if success, string if error)
         warn_threshold: Number of repetitions before warning (default 3)
         terminate_threshold: Number of repetitions before termination (default 5)
+        tool_output_hashes: Optional list of SHA256 output hashes per tool call.
+            When provided and consecutive hashes match, thresholds are halved.
 
     Returns:
         tuple: (action, count, last_sig) where action is "ok", "warn", or "terminate"
@@ -2559,8 +2612,17 @@ def _detect_tool_loop(tool_history, tool_errors, warn_threshold=3, terminate_thr
     if not last_error:
         return ("ok", 0, last_sig)
 
+    # --- Consecutive same-signature detection (A-A-A-A) ---
     consecutive = 1
     consecutive_failures = 1  # count only failing operations
+    consecutive_same_output = 1  # count consecutive identical output hashes
+
+    last_idx = len(tool_history) - 1
+    last_output_hash = (
+        tool_output_hashes[last_idx]
+        if tool_output_hashes and last_idx < len(tool_output_hashes)
+        else None
+    )
 
     for i in range(len(tool_history) - 2, -1, -1):
         if tool_history[i] == last_sig:
@@ -2568,16 +2630,63 @@ def _detect_tool_loop(tool_history, tool_errors, warn_threshold=3, terminate_thr
             # Only count if this was also a failure
             if i < len(tool_errors) and tool_errors[i]:
                 consecutive_failures += 1
+            # Track output hash matches for enhanced loop detection
+            if (last_output_hash is not None
+                    and tool_output_hashes
+                    and i < len(tool_output_hashes)
+                    and tool_output_hashes[i] == last_output_hash):
+                consecutive_same_output += 1
+            else:
+                # Output changed — stop counting same-output streak
+                # (but continue counting same-input streak for base thresholds)
+                last_output_hash = None
         else:
             break
 
-    # Use consecutive_failures for triggering warnings/termination
-    if consecutive_failures >= terminate_threshold:
-        return ("terminate", consecutive_failures, last_sig)
-    elif consecutive_failures >= warn_threshold:
-        return ("warn", consecutive_failures, last_sig)
+    # When outputs are identical, use halved thresholds (stronger stuck signal)
+    # Minimum thresholds: warn at 2, terminate at 3
+    if consecutive_same_output >= 2 and tool_output_hashes:
+        effective_warn = max(2, warn_threshold // 2)
+        effective_terminate = max(3, terminate_threshold // 2)
     else:
-        return ("ok", consecutive_failures, last_sig)
+        effective_warn = warn_threshold
+        effective_terminate = terminate_threshold
+
+    # Check consecutive detection first
+    if consecutive_failures >= effective_terminate:
+        return ("terminate", consecutive_failures, last_sig)
+    elif consecutive_failures >= effective_warn:
+        return ("warn", consecutive_failures, last_sig)
+
+    # --- Alternating two-tool cycle detection (A-B-A-B) ---
+    # Only check if we have at least 4 entries and consecutive didn't trigger
+    if len(tool_history) >= 4:
+        sig_a = tool_history[-1]
+        sig_b = tool_history[-2]
+        if sig_a != sig_b:
+            # Count how many entries match the A-B alternating pattern
+            alternating_count = 0
+            for i in range(len(tool_history) - 1, -1, -1):
+                pos_in_pair = (len(tool_history) - 1 - i) % 2
+                expected = sig_a if pos_in_pair == 0 else sig_b
+                if tool_history[i] == expected:
+                    # Only count if this entry was a failure
+                    if i < len(tool_errors) and tool_errors[i]:
+                        alternating_count += 1
+                    else:
+                        break  # success breaks the alternating failure chain
+                else:
+                    break
+
+            # Alternating thresholds are +1 above consecutive thresholds
+            # because the pattern involves two distinct signatures.
+            # With defaults (warn=3, terminate=5): warn at 4, terminate at 6.
+            if alternating_count >= terminate_threshold + 1:
+                return ("terminate", alternating_count, f"{sig_a} <-> {sig_b}")
+            elif alternating_count >= warn_threshold + 1:
+                return ("warn", alternating_count, f"{sig_a} <-> {sig_b}")
+
+    return ("ok", consecutive_failures, last_sig)
 
 
 async def run_agent_streaming(cmd, role="developer", timeout=None, output=None,
@@ -2612,8 +2721,11 @@ async def run_agent_streaming(cmd, role="developer", timeout=None, output=None,
     has_any_file_change = False
     tool_history = []          # list of "tool_name:key_input" strings
     tool_errors = []           # list of error strings (None if success, string if error)
+    tool_output_hashes = []    # list of SHA256 hashes of tool result content
     action_log = []            # per-tool action entries for agent_actions table
     stuck_phrase_count = 0
+    consecutive_text_only_turns = 0  # monologue detection: text-only assistant messages
+    monologue_warning_injected = False  # track if we've warned about monologue
     all_text_chunks = []       # accumulate assistant text for final result
     result_data = None         # the final "result" message from stream-json
     warning_injected = False
@@ -2775,7 +2887,8 @@ async def run_agent_streaming(cmd, role="developer", timeout=None, output=None,
                             tool_history,
                             tool_errors,
                             warn_threshold=LOOP_WARNING_THRESHOLD,
-                            terminate_threshold=LOOP_TERMINATE_THRESHOLD
+                            terminate_threshold=LOOP_TERMINATE_THRESHOLD,
+                            tool_output_hashes=tool_output_hashes,
                         )
 
                         if action == "terminate":
@@ -2851,6 +2964,10 @@ async def run_agent_streaming(cmd, role="developer", timeout=None, output=None,
 
                         tool_errors.append(error_text)
 
+                        # Compute output hash for loop detection
+                        output_hash = _compute_output_hash(content)
+                        tool_output_hashes.append(output_hash)
+
                         # Update the most recent action_log entry with result
                         if action_log:
                             entry = action_log[-1]
@@ -2867,6 +2984,7 @@ async def run_agent_streaming(cmd, role="developer", timeout=None, output=None,
                                 result_len = 0
                             entry["success"] = not is_error
                             entry["output_length"] = result_len
+                            entry["output_hash"] = output_hash
                             entry["duration_ms"] = int(
                                 (time.time() - entry.get("timestamp", time.time())) * 1000
                             )
