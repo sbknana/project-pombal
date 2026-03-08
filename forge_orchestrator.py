@@ -2930,6 +2930,28 @@ async def run_agent_streaming(cmd, role="developer", timeout=None, output=None,
                                 )
                                 log(f"  [EarlyTerm] {early_term_reason}", output)
 
+                # Monologue detection: track consecutive text-only assistant turns
+                if turn_has_tool_calls:
+                    consecutive_text_only_turns = 0
+                else:
+                    consecutive_text_only_turns += 1
+                    monologue_action = _check_monologue(
+                        consecutive_text_only_turns, turn_count,
+                    )
+                    if monologue_action == "terminate":
+                        early_term_reason = (
+                            f"Agent monologue: {consecutive_text_only_turns} "
+                            f"consecutive text-only messages without tool use"
+                        )
+                        log(f"  [Monologue] {early_term_reason}", output)
+                    elif (monologue_action == "warn"
+                            and not monologue_warning_injected):
+                        log(f"  [Monologue] WARNING: {consecutive_text_only_turns} "
+                            f"consecutive text-only turns (role={role}, "
+                            f"turn ~{turn_count}). Agent may be stuck reasoning "
+                            f"without acting.", output)
+                        monologue_warning_injected = True
+
                 # If we found a reason to terminate, break out
                 if early_term_reason:
                     break
