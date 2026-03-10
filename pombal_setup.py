@@ -344,7 +344,7 @@ def step_copy_files(base_path):
     else:
         print("  SKIP: prompts/ directory (not found)")
 
-    # Copy skills directory
+    # Copy skills directory (agent role skills)
     src_skills = SOURCE_DIR / "skills" / "security"
     if src_skills.exists():
         dest_skills = base_path / "skills" / "security"
@@ -358,6 +358,34 @@ def step_copy_files(base_path):
         print(f"  Copied: skills/security/ ({skill_count} files)")
     else:
         print("  SKIP: skills/security/ directory (not found)")
+
+    # Copy Claude Code slash command skills (.claude/skills/)
+    src_claude_skills = SOURCE_DIR / ".claude" / "skills"
+    if src_claude_skills.exists():
+        dest_claude_skills = base_path / ".claude" / "skills"
+        dest_claude_skills.mkdir(parents=True, exist_ok=True)
+        skill_count = 0
+        for skill_dir in src_claude_skills.iterdir():
+            if skill_dir.is_dir():
+                dest_skill = dest_claude_skills / skill_dir.name
+                if dest_skill.exists():
+                    shutil.rmtree(str(dest_skill))
+                shutil.copytree(str(skill_dir), str(dest_skill))
+                skill_count += 1
+        print(f"  Copied: .claude/skills/ ({skill_count} slash commands)")
+        print(f"    /forge-start, /forge-end, /forge-context, /forge-search,")
+        print(f"    /forge-update, /forge-orchestrate, /housekeeping")
+    else:
+        print("  SKIP: .claude/skills/ directory (not found)")
+
+    # Copy nightly review script
+    src_nightly = SOURCE_DIR / "nightly_review.py"
+    if src_nightly.exists():
+        dest_nightly = base_path / "nightly_review.py"
+        shutil.copy2(str(src_nightly), str(dest_nightly))
+        print(f"  Copied: nightly_review.py")
+    else:
+        print("  SKIP: nightly_review.py (not found)")
 
     return True
 
