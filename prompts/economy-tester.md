@@ -19,7 +19,7 @@ You test the DOGE-HABEUS economy integration for the Loom interactive fiction en
 Your FIRST action must be this exact bash command. Do not read files, do not plan, do not think. Copy-paste this as your very first tool call:
 
 ```bash
-cd Loom && echo "=== API CHECK ===" && curl -s -m 3 http://LOOM_HOST:3000/api/trpc/wallet.getBalance 2>&1 | head -20 && echo "=== SOURCE FILES ===" && find . -type f -name "*.ts" -not -path "*/node_modules/*" | xargs grep -l -i "wallet\|economy\|marketplace\|doge\|earn\|bank" 2>/dev/null | head -20 && echo "=== PACKAGE ===" && cat package.json 2>/dev/null | head -30
+cd Loom && echo "=== API CHECK ===" && curl -s -m 3 $LOOM_API_URL/api/trpc/wallet.getBalance 2>&1 | head -20 && echo "=== SOURCE FILES ===" && find . -type f -name "*.ts" -not -path "*/node_modules/*" | xargs grep -l -i "wallet\|economy\|marketplace\|doge\|earn\|bank" 2>/dev/null | head -20 && echo "=== PACKAGE ===" && cat package.json 2>/dev/null | head -30
 ```
 
 **If this command fails (directory not found, etc.), immediately run:**
@@ -35,7 +35,7 @@ Then proceed to Turn 2.
 **If API responded with JSON in Turn 1:**
 
 ```bash
-cd Loom && echo "TEST1: Balance" && curl -s -m 3 http://LOOM_HOST:3000/api/trpc/wallet.getBalance 2>&1 && echo -e "\nTEST2: DailyCaps" && curl -s -m 3 http://LOOM_HOST:3000/api/trpc/earn.getDailyCaps 2>&1 && echo -e "\nTEST3: Prices" && curl -s -m 3 http://LOOM_HOST:3000/api/trpc/bank.getPrices 2>&1 && echo -e "\nTEST4: Browse" && curl -s -m 3 http://LOOM_HOST:3000/api/trpc/marketplace.browse 2>&1 && echo -e "\nTEST5: MintStatus" && curl -s -m 3 http://LOOM_HOST:3000/api/trpc/chainMint.getStatus 2>&1
+cd Loom && echo "TEST1: Balance" && curl -s -m 3 $LOOM_API_URL/api/trpc/wallet.getBalance 2>&1 && echo -e "\nTEST2: DailyCaps" && curl -s -m 3 $LOOM_API_URL/api/trpc/earn.getDailyCaps 2>&1 && echo -e "\nTEST3: Prices" && curl -s -m 3 $LOOM_API_URL/api/trpc/bank.getPrices 2>&1 && echo -e "\nTEST4: Browse" && curl -s -m 3 $LOOM_API_URL/api/trpc/marketplace.browse 2>&1 && echo -e "\nTEST5: MintStatus" && curl -s -m 3 $LOOM_API_URL/api/trpc/chainMint.getStatus 2>&1
 ```
 
 **If API unreachable:** Skip directly to Turn 3. Do NOT retry the API. Do NOT give up.
@@ -159,7 +159,7 @@ GET  /api/trpc/chainMint.getStatus
 ## Environment
 
 - Source: `Loom/`
-- API: `http://LOOM_HOST:3000`
-- DB: PostgreSQL on LOOM_HOST:5432 (credentials via $LOOM_DATABASE_URL)
+- API: `$LOOM_API_URL`
+- DB: PostgreSQL at $LOOM_DATABASE_URL
 - TigerBeetle may not be installed — test fallback, report as non-blocking
 - DH blockchain node may not be running — verify graceful handling

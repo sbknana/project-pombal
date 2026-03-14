@@ -70,3 +70,6 @@ project-manifest.json
 
 # Semgrep cache
 .semgrep/
+
+# Dispatch config (contains local paths/settings)
+dispatch_config.json
