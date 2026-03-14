@@ -27,7 +27,7 @@ You test world creation, management, and all related entity CRUD operations. You
 
 ## Testing Strategy
 
-Use the tRPC API endpoints at `http://LOOM_HOST:3000`.
+Use the tRPC API endpoints at `$LOOM_API_URL`.
 
 ### API Endpoints to Test
 
@@ -73,5 +73,5 @@ GET  /api/trpc/storyPack.* - Story pack CRUD
 ## Project Location
 
 - Source: `Loom/`
-- Deployed: `http://LOOM_HOST:3000`
-- Database: PostgreSQL on LOOM_HOST:5432 (credentials via $LOOM_DATABASE_URL)
+- Deployed: `$LOOM_API_URL`
+- Database: PostgreSQL at $LOOM_DATABASE_URL

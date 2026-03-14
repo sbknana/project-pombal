@@ -5,9 +5,7 @@
     "max_tasks_per_project": 6,
     "skip_projects": [],
     "priority_boost": {},
-    "only_projects": [
-        39
-    ],
+    "only_projects": [],
     "security_review": true,
     "security_review_timeout": 900,
     "model_developer": "sonnet",
@@ -52,7 +50,7 @@
     "project_dirs": {},
     "provider": "claude",
     "ollama_base_url": "http://localhost:11434",
-    "ollama_model": "qwen3.5:27b",
-    "ollama_model_planner": "qwen3.5:27b",
-    "theforge_db": "${PROJECT_BASE_DIR}/TheForge/theforge.db"
+    "ollama_model": "YOUR_MODEL_HERE",
+    "ollama_model_planner": "YOUR_MODEL_HERE",
+    "theforge_db": "/path/to/theforge.db"
 }

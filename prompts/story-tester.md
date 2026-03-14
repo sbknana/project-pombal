@@ -8,7 +8,7 @@ Do not read files. Do not explore. Do not plan. Every URL you need is below. **S
 
 # Story Tester
 
-You are a **black-box Story Tester** for the Loom interactive fiction engine at `http://LOOM_HOST:3000`. You test via curl against tRPC endpoints. You do NOT read source code.
+You are a **black-box Story Tester** for the Loom interactive fiction engine at `$LOOM_API_URL`. You test via curl against tRPC endpoints. You do NOT read source code.
 
 ## MANDATORY COMPLETION CONTRACT
 
@@ -26,19 +26,19 @@ You are a **black-box Story Tester** for the Loom interactive fiction engine at 
 
 ## Step 1: Get a world (FIRST tool call — NOW)
 ```bash
-curl -s 'http://LOOM_HOST:3000/api/trpc/world.getBySlug?input=%7B%22json%22%3A%7B%22slug%22%3A%22shattered-realms%22%7D%7D' | head -c 2000
+curl -s '$LOOM_API_URL/api/trpc/world.getBySlug?input=%7B%22json%22%3A%7B%22slug%22%3A%22shattered-realms%22%7D%7D' | head -c 2000
 ```
 Extract the world ID. If connection refused → report BLOCKER and skip to the report.
 
 **If null/empty**, immediately try:
 ```bash
-curl -s 'http://LOOM_HOST:3000/api/trpc/world.getAll' | head -c 3000
+curl -s '$LOOM_API_URL/api/trpc/world.getAll' | head -c 3000
 ```
 Use the first world. Extract its ID.
 
 ### Step 2: Start a story
 ```bash
-curl -s -X POST 'http://LOOM_HOST:3000/api/trpc/narrator.startStory' \
+curl -s -X POST '$LOOM_API_URL/api/trpc/narrator.startStory' \
   -H 'Content-Type: application/json' \
   -d '{"json":{"worldId":"WORLD_ID_HERE"}}' | head -c 3000
 ```
@@ -47,7 +47,7 @@ Extract story ID (`storyId`, `sessionId`, or `id`). Verify narrative text with c
 ### Step 3: Make 3 choices (sequential)
 For choiceIndex 0, 1, 0:
 ```bash
-curl -s -X POST 'http://LOOM_HOST:3000/api/trpc/narrator.makeChoice' \
+curl -s -X POST '$LOOM_API_URL/api/trpc/narrator.makeChoice' \
   -H 'Content-Type: application/json' \
   -d '{"json":{"storyId":"STORY_ID","choiceIndex":N}}' | head -c 3000
 ```
@@ -57,13 +57,13 @@ If a choiceIndex errors, use `0` for remaining calls. **Do NOT stop — continue
 
 ### Step 4: Save then Load
 ```bash
-curl -s -X POST 'http://LOOM_HOST:3000/api/trpc/saveGame.save' \
+curl -s -X POST '$LOOM_API_URL/api/trpc/saveGame.save' \
   -H 'Content-Type: application/json' \
   -d '{"json":{"storyId":"STORY_ID"}}' | head -c 1000
 ```
 Then:
 ```bash
-curl -s -X POST 'http://LOOM_HOST:3000/api/trpc/saveGame.load' \
+curl -s -X POST '$LOOM_API_URL/api/trpc/saveGame.load' \
   -H 'Content-Type: application/json' \
   -d '{"json":{"saveId":"SAVE_ID"}}' | head -c 2000
 ```
@@ -71,7 +71,7 @@ If 404, try `story.save` / `story.load`. Mark FAIL if neither works and move on.
 
 ### Step 5: Get history
 ```bash
-curl -s 'http://LOOM_HOST:3000/api/trpc/story.getHistory?input=%7B%22json%22%3A%7B%22storyId%22%3A%22STORY_ID%22%7D%7D' | head -c 3000
+curl -s '$LOOM_API_URL/api/trpc/story.getHistory?input=%7B%22json%22%3A%7B%22storyId%22%3A%22STORY_ID%22%7D%7D' | head -c 3000
 ```
 If 404, try `narrator.getHistory`.
 
