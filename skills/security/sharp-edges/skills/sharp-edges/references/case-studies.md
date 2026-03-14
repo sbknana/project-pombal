@@ -272,3 +272,4 @@ When examining a library for sharp edges:
 | TLS | Raw OpenSSL | Higher-level wrappers |
 | Serialization | pickle, YAML | JSON, protobuf |
 | Password compare | strcmp | hash_equals, secrets.compare_digest |
+

@@ -242,3 +242,4 @@ This standard cannot be overridden by custom agent prompts.
 - **Use `--role your-agent` to select it.** The filename stem is the role name.
 - **Check `_common.md` for overlap.** Don't repeat rules that are already shared.
 - **Tool guidance is advisory.** Agents run with full permissions — your prompt controls behavior, not the CLI.
+

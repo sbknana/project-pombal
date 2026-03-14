@@ -116,3 +116,4 @@ This plugin is part of the Trail of Bits skills marketplace. Enable it in Claude
 ## License
 
 CC-BY-SA-4.0
+

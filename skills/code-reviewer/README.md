@@ -12,3 +12,4 @@ Skills for the EQUIPA code-reviewer agent role.
 ## Usage
 
 Loaded automatically by the orchestrator when dispatching code-reviewer agents.
+

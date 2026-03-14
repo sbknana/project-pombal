@@ -477,3 +477,4 @@ For Python utilities, see [{baseDir}/resources/sarif_helpers.py]({baseDir}/resou
 - [pysarif (Python)](https://github.com/Kjeld-P/pysarif)
 - [GitHub SARIF Support](https://docs.github.com/en/code-security/code-scanning/integrating-with-code-scanning/sarif-support-for-code-scanning)
 - [SARIF Validator](https://sarifweb.azurewebsites.net/)
+

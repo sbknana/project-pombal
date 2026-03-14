@@ -561,3 +561,4 @@ CREATE INDEX IF NOT EXISTS idx_agent_actions_tool ON agent_actions(tool_name, su
 -- ============================================================
 -- Marks fresh installs as v3. Migrations handle upgrades from older versions.
 PRAGMA user_version = 3;
+

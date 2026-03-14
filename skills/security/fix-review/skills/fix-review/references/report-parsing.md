@@ -396,3 +396,4 @@ Parsed [N] findings, but some content may have been missed.
 Detected findings: [list IDs]
 Please verify all expected findings are included.
 ```
+

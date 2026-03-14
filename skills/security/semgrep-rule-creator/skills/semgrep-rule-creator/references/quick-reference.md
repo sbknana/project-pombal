@@ -171,3 +171,4 @@ semgrep -f rule.yaml test-file.py
 3. **Missing ellipsis**: Use `...` to match variable arguments
 4. **Taint not flowing**: Check if sanitizer is too broad
 5. **YAML syntax errors**: Validate with `semgrep --validate`
+

@@ -11,3 +11,4 @@ Skills for the EQUIPA debugger agent role.
 ## Usage
 
 Loaded automatically by the orchestrator when dispatching debugger agents.
+

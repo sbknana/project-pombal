@@ -470,3 +470,4 @@ Benchmark projects are reset to a tagged baseline (`autoresearch-baseline`) betw
   Vibe coded with Claude<br>
   <em>&copy; 2026 Forgeborn</em>
 </p>
+

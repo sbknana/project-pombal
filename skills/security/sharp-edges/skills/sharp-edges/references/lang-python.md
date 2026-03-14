@@ -272,3 +272,4 @@ result = api.get_user().profile.settings.theme
 | `class Foo: bar = []` | Shared mutable class attribute |
 | `template.format(obj)` with user template | Format string injection |
 | `subprocess.*(..., shell=True)` | Command injection |
+

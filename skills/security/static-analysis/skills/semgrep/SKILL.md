@@ -335,3 +335,4 @@ semgrep -f ~/semgrep-rules .
 - Docs: https://semgrep.dev/docs/
 - Trail of Bits Rules: https://github.com/trailofbits/semgrep-rules
 - Blog: https://semgrep.dev/blog/
+
