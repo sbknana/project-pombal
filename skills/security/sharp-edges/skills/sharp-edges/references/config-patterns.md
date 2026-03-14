@@ -331,3 +331,4 @@ For configuration schemas, verify:
 - [ ] **Timing bounds**: Lifetime/timeout params have both min AND max limits
 - [ ] **Hostname/URL validation**: Network addresses validated at construction
 - [ ] **Constructor validation**: All security params validated, not just defaulted
+

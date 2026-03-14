@@ -352,3 +352,4 @@ That's Coordinator Mode. The agents do the work. Claude does the coordination. Y
 
 *Built by Forgeborn. Vibe coded with Claude.*
 *Copyright 2026 Forgeborn. All rights reserved.*
+

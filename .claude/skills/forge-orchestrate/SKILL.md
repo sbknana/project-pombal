@@ -142,3 +142,4 @@ UPDATE tasks SET status = 'in_progress' WHERE id IN ({task_ids}) AND status = 't
 - **Never kill running orchestrators without user confirmation.**
 - **Orchestrators manage their own task status** — don't manually update task status to 'done' unless you verified the orchestrator completed successfully.
 - **Log files** are at `/tmp/forge-task-{id}.log` and `/tmp/forge-autorun-{project_id}.log`.
+

@@ -174,3 +174,4 @@ SUMMARY: One-line overall code quality assessment
   - **15+ files**: Consider parallel Task agents by subsystem (frontend, backend, schema), but only if architecture is unfamiliar
 - If CHANGELOG.md claims fixes, verify those specific files/lines FIRST before full review
 - For focused changes (single bug fix, one feature), parallelization overhead exceeds benefit — stay linear
+

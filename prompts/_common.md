@@ -126,3 +126,4 @@ REFLECTION: What approach did you take? What worked well? What didn't work? What
 - **Async where appropriate.** Use non-blocking I/O for network calls, file operations, and database queries. Do not block the event loop.
 
 A fast language does not fix a slow algorithm. Efficiency is a requirement, not an optimization.
+

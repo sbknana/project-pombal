@@ -15,3 +15,4 @@ Loaded automatically by the orchestrator when dispatching tester agents:
 ```bash
 claude -p --add-dir skills/tester/ ...
 ```
+

@@ -78,3 +78,4 @@ where VariantFlow::flowPath(source, sink)
 select sink.getNode(), source, sink,
   "Potential variant: tainted data from $@ flows to dangerous sink.",
   source.getNode(), "user-controlled input"
+

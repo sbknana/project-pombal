@@ -298,3 +298,4 @@ git diff <range> | grep -E "\+|\-|\*|/"
 
 **For detailed analysis workflow, see [methodology.md](methodology.md)**
 **For building exploit scenarios, see [adversarial.md](adversarial.md)**
+

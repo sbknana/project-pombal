@@ -78,3 +78,4 @@ Score each on a 1-10 scale:
 **Common Error Alert** (seen 4x):
 Watch out for this recurring issue: `agent hit max turns limit (40)`
 If you encounter this error, try a different approach rather than repeating the same pattern.
+

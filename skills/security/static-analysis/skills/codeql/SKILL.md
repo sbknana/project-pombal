@@ -313,3 +313,4 @@ def safe():
 - Security Lab: https://securitylab.github.com/
 - Trail of Bits Queries: https://github.com/trailofbits/codeql-queries
 - VSCode Extension: "CodeQL" for query development
+

@@ -524,3 +524,4 @@ This project currently has **no HTTP API endpoints**. If you need to expose EQUI
 - [Architecture](ARCHITECTURE.md)
 - [Deployment](DEPLOYMENT.md)
 - [Contributing](CONTRIBUTING.md)
+

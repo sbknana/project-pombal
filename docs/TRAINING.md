@@ -327,3 +327,4 @@ The pre-trained model is fine-tuned on thousands of EQUIPA task executions acros
 ---
 
 *Copyright 2026 Forgeborn. Vibe coded with Claude.*
+

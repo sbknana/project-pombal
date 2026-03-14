@@ -406,3 +406,4 @@ For each detected concern:
 **Recommendation:**
 [Suggested action]
 ```
+

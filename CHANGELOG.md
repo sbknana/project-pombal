@@ -83,3 +83,4 @@ All notable changes to EQUIPA are documented here.
 - Agent prompt files for all roles.
 - Configuration file generation.
 - Claude Code MCP integration.
+

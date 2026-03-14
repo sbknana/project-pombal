@@ -116,3 +116,4 @@ The orchestrator will:
 - **Auto-run:** `--auto-run` to scan all projects and dispatch work by priority
 - **Custom agents:** Drop a `.md` file in `prompts/` — see [CUSTOM_AGENTS.md](CUSTOM_AGENTS.md)
 - **Full reference:** See [USER_GUIDE.md](USER_GUIDE.md)
+

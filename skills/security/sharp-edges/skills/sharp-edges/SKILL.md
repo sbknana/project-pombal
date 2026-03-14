@@ -290,3 +290,4 @@ Before concluding analysis:
 - [ ] Verified error paths don't bypass security
 - [ ] Checked configuration validation
 - [ ] Constructor params validated (not just defaulted) - see [config-patterns.md](references/config-patterns.md#unvalidated-constructor-parameters)
+

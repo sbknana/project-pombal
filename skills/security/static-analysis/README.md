@@ -57,3 +57,4 @@ Use this plugin when you need to:
 ## Related Skills
 
 - `variant-analysis` - Use CodeQL/Semgrep patterns to find bug variants
+

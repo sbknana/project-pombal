@@ -84,3 +84,4 @@ python db_migrate.py theforge.db                          # Run migrations
 - **Three-tier self-improvement** — ForgeSmith (rule-based) + GEPA (prompt evolution) + SIMBA (rule synthesis)
 - **Skills system** — Per-role skills loaded at task start, teaching concrete methods
 - **Quality standard** — Non-negotiable 7-point code quality standard for all agents
+

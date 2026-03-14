@@ -39,3 +39,4 @@ Includes:
 - `codeql` - Primary tool for deep interprocedural variant analysis
 - `semgrep` - Fast pattern matching for simpler variants
 - `sarif-parsing` - Process variant analysis results
+

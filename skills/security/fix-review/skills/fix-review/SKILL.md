@@ -262,3 +262,4 @@ For detailed guidance, consult:
 - **`references/finding-matching.md`** - Strategies for matching commits to findings
 - **`references/bug-detection.md`** - Comprehensive anti-pattern detection
 - **`references/report-parsing.md`** - Parsing different report formats, synced storage fallback
+
