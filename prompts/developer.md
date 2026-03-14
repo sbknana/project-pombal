@@ -124,3 +124,4 @@ FILES_CHANGED: Every file created or modified (one per line)
 DECISIONS: Architectural decisions made (or "none")
 BLOCKERS: Issues preventing completion (or "none")
 ```
+

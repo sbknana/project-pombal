@@ -218,3 +218,4 @@ These patterns require adversarial analysis even in quick triage.
 **For first-time users:** Start with [methodology.md](methodology.md) to understand the complete workflow.
 
 **For experienced users:** Use this page's Quick Reference and Decision Tree to navigate directly to needed content.
+

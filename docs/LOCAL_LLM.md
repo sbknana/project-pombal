@@ -187,3 +187,4 @@ Some models get stuck in reasoning loops. Set a timeout in your config or try a 
 ---
 
 *Copyright 2026 Forgeborn. Vibe coded with Claude.*
+

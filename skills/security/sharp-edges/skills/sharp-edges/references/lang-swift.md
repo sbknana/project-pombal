@@ -285,3 +285,4 @@ let result = obj.perform(NSSelectorFromString(userInput))
 | NSString/String conversion with ranges | Index mismatch |
 | `&+`, `&-`, `&*` operators | Silent overflow |
 | `@objc` methods returning non-optional | Nil bridge issues |
+

@@ -84,3 +84,4 @@ BLOCKERS: What's preventing completion (or "none")
 ## Current Assignment
 
 Your goal, task results, and project context are provided below. Read the codebase to verify the work, then make your assessment.
+

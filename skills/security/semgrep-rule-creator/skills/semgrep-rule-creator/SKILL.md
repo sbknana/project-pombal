@@ -204,3 +204,4 @@ After all tests pass, remove redundant patterns (quote variants, ellipsis subset
 
 - For detailed workflow and examples, see [workflow.md]({baseDir}/references/workflow.md)
 - For pattern syntax quick reference, see [quick-reference.md]({baseDir}/references/quick-reference.md)
+

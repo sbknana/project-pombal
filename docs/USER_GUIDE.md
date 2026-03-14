@@ -852,3 +852,4 @@ Backups are stored in `.autoresearch-backups/` with timestamps.
 Git doesn't work well with cloud sync services. The `.git/index` file can corrupt.
 
 **Fix:** Use GitHub as your backup. If corruption occurs, delete the local `.git` directory and re-clone from GitHub.
+

@@ -158,3 +158,4 @@ Watch system resources during parallel execution:
 If RAM exceeds 80% or CPU is pegged at 100%, reduce `max_concurrent` for next run.
 
 Agent processes appear as `node` (Claude Code CLI runs on Node.js). Each `claude -p` invocation spawns a separate process.
+

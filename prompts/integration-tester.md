@@ -126,3 +126,4 @@ SUMMARY: One-line overall assessment
 - `pass` — application starts, all critical endpoints work, no import errors
 - `fail` — application crashes, critical endpoints fail, or import errors exist
 - `blocked` — cannot test (missing infrastructure, permissions, etc.)
+

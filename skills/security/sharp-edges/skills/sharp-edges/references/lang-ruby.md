@@ -271,3 +271,4 @@ mutex.synchronize { @counter += 1 }
 | `ERB.new(user_input)` | Template injection |
 | `File.read("|...` or `File.open("|...` | Command execution |
 | `File.read(params[` without path validation | Path traversal |
+

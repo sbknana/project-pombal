@@ -346,3 +346,4 @@ semgrep --test --config rule.yaml test-file
 2. Add sanitizers for validation functions
 3. Use `pattern-inside` to limit scope
 4. Use `metavariable-regex` to filter
+
