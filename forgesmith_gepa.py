@@ -340,7 +340,7 @@ def run_gepa_for_role(role, episodes, cfg, dry_run=False):
             # H2: Do NOT log key or key length — only confirm it was loaded from env
         elif model_name.startswith("ollama"):
             # Local model via Ollama on forge-inference (free)
-            ollama_base = os.environ.get("OLLAMA_BASE_URL", "http://OLLAMA_HOST:11434")
+            ollama_base = os.environ.get("OLLAMA_URL", "http://localhost:11434")
             lm = dspy.LM(model_name, api_base=ollama_base)
             reflection_lm = dspy.LM(reflection_model, api_base=ollama_base)
             log(f"Using local Ollama model (free): {model_name} at {ollama_base}")
