@@ -17,8 +17,8 @@ import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from forge_orchestrator import (
     classify_error,
@@ -161,8 +161,13 @@ def test_ensure_schema_creates_table():
     def mock_get_db(write=False):
         return conn
 
+<<<<<<< HEAD
     import forge_orchestrator
     forge_orchestrator._SCHEMA_ENSURED = False
+=======
+    import forge_orchestrator as _fo
+    _fo._SCHEMA_ENSURED = False
+>>>>>>> forge-task-1504
     with patch("forge_orchestrator.get_db_connection", side_effect=mock_get_db):
         ensure_schema()
 

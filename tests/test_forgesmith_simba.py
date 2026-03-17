@@ -20,8 +20,8 @@ import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from forgesmith_simba import (
     find_high_variance_episodes,
@@ -53,6 +53,14 @@ def get_db_connection(write=False):
         conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def setup_module(module):
+    """Pytest hook: set up test data before any test in this module."""
+    import forge_orchestrator
+    forge_orchestrator._SCHEMA_ENSURED = False
+    forge_orchestrator.ensure_schema()
+    setup_simba_test_data()
 
 
 def setup_simba_test_data():

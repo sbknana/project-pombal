@@ -20,8 +20,8 @@ import sqlite3
 import sys
 from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from forge_orchestrator import (
     get_relevant_episodes,
@@ -45,6 +45,13 @@ def get_db_connection(write=False):
         conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def setup_module(module):
+    """Pytest hook: set up test data before any test in this module."""
+    import forge_orchestrator
+    forge_orchestrator._SCHEMA_ENSURED = False
+    setup_test_data()
 
 
 def setup_test_data():
