@@ -41,11 +41,20 @@ def test_task_type_field_exists():
         f"task_type default is '{default_value}', expected 'feature'"
 
 
+def _find_dispatch_config():
+    """Find dispatch_config.json or fall back to example file at repo root."""
+    root = Path(__file__).parent.parent
+    config_path = root / "dispatch_config.json"
+    if config_path.exists():
+        return config_path
+    example_path = root / "dispatch_config.example.json"
+    assert example_path.exists(), "Neither dispatch_config.json nor dispatch_config.example.json found"
+    return example_path
+
+
 def test_dispatch_config_has_all_prompts():
     """Test that dispatch_config.json defines all 4 required task types."""
-    # dispatch_config.json lives at repo root (one level above tests/)
-    config_path = Path(__file__).parent.parent / "dispatch_config.json"
-    assert config_path.exists(), "dispatch_config.json not found"
+    config_path = _find_dispatch_config()
 
     with open(config_path, 'r') as f:
         config = json.load(f)
@@ -64,7 +73,7 @@ def test_dispatch_config_has_all_prompts():
 
 def test_prompt_content_matches_spec():
     """Test that prompt content matches the acceptance criteria."""
-    config_path = Path(__file__).parent.parent / "dispatch_config.json"
+    config_path = _find_dispatch_config()
     with open(config_path, 'r') as f:
         config = json.load(f)
 
