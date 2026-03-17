@@ -75,3 +75,11 @@ project-manifest.json
 # Dispatch config (contains local paths/settings)
 dispatch_config.json
 
+
+# Training scripts (Forgeborn-specific, not for public repo)
+train_qlora*.py
+
+# Local config (users create from .example files)
+forge_config.json
+dispatch_config.json
+mcp_config.json
