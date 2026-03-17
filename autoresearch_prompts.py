@@ -226,18 +226,19 @@ def call_ollama(prompt: str, model: str = OLLAMA_MODEL) -> str:
 
 def call_anthropic(prompt: str, model: str = "claude-sonnet-4-20250514") -> str:
     """Call Anthropic API for tier 2/3."""
-    # Read API key
-    api_key = None
-    key_file = Path("REDACTED_KEYS_PATH")
-    if key_file.exists():
-        for line in key_file.read_text().splitlines():
-            if "anthropic" in line.lower() and "=" in line:
-                api_key = line.split("=", 1)[1].strip()
-                break
+    # Read API key from environment (preferred) or legacy key file
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
 
     if not api_key:
-        # Try env
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        # Fallback: check legacy key file path from env or skip
+        key_file_path = os.environ.get("API_KEYS_FILE")
+        if key_file_path:
+            key_file = Path(key_file_path)
+            if key_file.exists():
+                for line in key_file.read_text().splitlines():
+                    if "anthropic" in line.lower() and "=" in line:
+                        api_key = line.split("=", 1)[1].strip()
+                        break
 
     if not api_key:
         print("  ERROR: No Anthropic API key found")
@@ -374,13 +375,22 @@ def rollback_all():
 
 
 def sync_to_claudinator():
-    """Rsync updated prompts to Claudinator."""
-    print("\nSyncing prompts to Claudinator...")
+    """Rsync updated prompts to the primary server."""
+    ssh_user = os.environ.get("SSH_USER", "user")
+    claudinator_host = os.environ.get("CLAUDINATOR_HOST")
+    ssh_key = os.environ.get("SSH_KEY_PATH", "~/.ssh/id_ed25519")
+    remote_base = os.environ.get("EQUIPA_BASE", "REDACTED_EQUIPA_DIR")
+
+    if not claudinator_host:
+        print("\n  SKIP: CLAUDINATOR_HOST not set, cannot sync remotely")
+        return False
+
+    print(f"\nSyncing prompts to {claudinator_host}...")
     cmd = [
         "rsync", "-avz",
         str(PROMPTS_DIR) + "/",
-        "user@YOUR_HOST:/path/to/Equipa/prompts/",
-        "-e", "ssh -i ~/.ssh/id_ed25519"
+        f"{ssh_user}@{claudinator_host}:{remote_base}/prompts/",
+        "-e", f"ssh -i {os.path.expanduser(ssh_key)}"
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     if result.returncode == 0:
