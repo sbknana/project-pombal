@@ -772,6 +772,23 @@ def ensure_schema():
             )
         """)
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS lessons_learned (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER,
+                role TEXT,
+                error_type TEXT,
+                error_signature TEXT,
+                lesson TEXT NOT NULL,
+                source TEXT DEFAULT 'forgesmith',
+                times_seen INTEGER DEFAULT 1,
+                times_injected INTEGER DEFAULT 0,
+                effectiveness_score REAL,
+                active INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS agent_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 task_id INTEGER NOT NULL, cycle_number INTEGER NOT NULL,
