@@ -89,6 +89,58 @@ def load_config():
         "rollback_threshold": -0.1,
         "suppression_cooldown_days": 14,
         "forgesmith_project_id": 28,
+        "rubric_definitions": {
+            "developer": {
+                "result_success": 5,
+                "files_changed": 3,
+                "tests_written": 3,
+                "turns_efficiency": 2,
+                "output_compliance": 2,
+                "dependency_direction": 2,
+                "separation_of_concerns": 2,
+                "error_handling": 2,
+                "naming_consistency": 2,
+            },
+            "tester": {
+                "tests_pass": 5,
+                "edge_cases": 3,
+                "coverage_meaningful": 2,
+                "false_positives": -2,
+            },
+            "code-reviewer": {
+                "issues_found": 3,
+                "actionable_feedback": 2,
+                "false_alarms": -1,
+            },
+            "security-reviewer": {
+                "vulns_found": 3,
+                "severity_accuracy": 2,
+                "false_alarms": -1,
+            },
+            "integration-tester": {
+                "tests_pass": 5,
+                "edge_cases": 3,
+                "coverage_meaningful": 2,
+                "false_positives": -2,
+            },
+            "frontend-designer": {
+                "result_success": 5,
+                "files_changed": 3,
+                "turns_efficiency": 2,
+                "output_compliance": 2,
+            },
+            "researcher": {
+                "result_success": 5,
+                "output_compliance": 3,
+                "actionable_feedback": 2,
+            },
+        },
+        "rubric_evolution": {
+            "max_weight_change_pct": 10,
+            "min_sample_size": 10,
+            "evolution_lookback_days": 30,
+        },
+        "rubric_version": 1,
     }
     if CONFIG_FILE.exists():
         with open(CONFIG_FILE) as f:
@@ -1645,7 +1697,7 @@ def compute_rubric_score(run, cfg):
     if not rubric:
         rubric = {"result_success": 5, "output_compliance": 3, "turns_efficiency": 2}
     max_possible = sum(w for w in rubric.values() if w > 0)
-    normalized = round(total / max_possible, 3) if max_possible > 0 else 0.0
+    normalized = round(min(total / max_possible, 1.0), 3) if max_possible > 0 else 0.0
 
     return scores, round(total, 1), max_possible, round(normalized, 3)
 
