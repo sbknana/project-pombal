@@ -241,7 +241,11 @@ def test_format_lessons_wraps_in_task_input():
     assert '<task-input type="lessons" trust="derived">' in result, \
         f"Missing task-input wrapper: {result[:100]}"
     assert "</task-input>" in result, f"Missing closing tag: {result[-50:]}"
-    assert "## Lessons from Previous Runs" in result, f"Missing header: {result[:100]}"
+
+    # Header is only included when a delimiter is provided
+    result_with_delimiter = format_lessons_for_injection(lessons, delimiter="TEST_DELIM_12345")
+    assert "TEST_DELIM_12345" in result_with_delimiter, \
+        f"Missing delimiter in output: {result_with_delimiter[:200]}"
 
     print(f"  OK: Output wrapped in task-input tags")
     print("PASS: format_lessons_for_injection wraps correctly")
