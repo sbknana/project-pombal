@@ -31,7 +31,7 @@ Usage:
     # Resume from a specific phase (skip completed ones)
     python3 forge_arena.py --resume-from 3
 
-    # Run BlockNet Go blockchain rewrite
+    # Run CHAIN-NODE Go blockchain rewrite
     python3 forge_arena.py --project chain-node
 
     # Run EQUIPA Python rewrite
@@ -655,20 +655,20 @@ Museum Wings:
 ]
 
 
-# --- BlockNet Go Blockchain Rewrite Phases ---
+# --- CHAIN-NODE Go Blockchain Rewrite Phases ---
 # Complete rewrite from Node.js → Go. CometBFT consensus, pgx state, 2500 TPS / 500ms blocks.
 
-BLOCK_NET_PHASES = [
+CHAIN_NODE_PHASES = [
     {
         "id": 1,
         "name": "Foundation — Go Module, Config, CometBFT ABCI Scaffold",
-        "developer_task": """Build the Go foundation for the BlockNet blockchain.
+        "developer_task": """Build the Go foundation for the CHAIN-NODE blockchain.
 
-**Context:** This is a complete rewrite of the Node.js BlockNet blockchain in Go.
+**Context:** This is a complete rewrite of the Node.js CHAIN-NODE blockchain in Go.
 Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 
 **Requirements:**
-1. Go module: `github.com/forgeborn/chain-node`
+1. Go module: `github.com/example/blockchain-node`
 2. Config via `envconfig`:
    - CHAIN_ID, MONIKER, GENESIS_PATH, DB_PATH, RPC_PORT (26657), P2P_PORT (26656)
    - VALIDATOR_KEY_PATH, LOG_LEVEL, MAX_VALIDATORS
@@ -698,7 +698,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 - ABCI Info returns chain version
 - State store opens/closes cleanly
 """,
-        "tester_task": """Write tests for the BlockNet Go blockchain foundation.
+        "tester_task": """Write tests for the CHAIN-NODE Go blockchain foundation.
 
 **Test:**
 1. Config loading — defaults, env override, missing required vars error
@@ -714,7 +714,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 - Use `testing.T` with subtests
 - Temp directories for BadgerDB in tests (cleanup after)
 """,
-        "security_task": """Security review the BlockNet blockchain foundation.
+        "security_task": """Security review the CHAIN-NODE blockchain foundation.
 
 **Focus:**
 1. Key management — validator keys loaded safely? Not logged?
@@ -725,7 +725,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 6. Dependencies — known CVEs in CometBFT, BadgerDB?
 7. Memory — unbounded allocations on startup?
 """,
-        "review_task": """Code review the BlockNet blockchain foundation.
+        "review_task": """Code review the CHAIN-NODE blockchain foundation.
 
 **Check:**
 1. Go idioms — error wrapping, no panic in production paths
@@ -739,7 +739,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
     {
         "id": 2,
         "name": "Transaction Engine — Types, Validation, Mempool",
-        "developer_task": """Implement the transaction engine for BlockNet.
+        "developer_task": """Implement the transaction engine for CHAIN-NODE.
 
 **Transaction types:**
 1. Transfer: {from, to, amount, fee, nonce, signature}
@@ -779,7 +779,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 - Insufficient balance → rejected
 - Mempool respects size limit and fee ordering
 """,
-        "tester_task": """Write comprehensive tests for the BlockNet transaction engine.
+        "tester_task": """Write comprehensive tests for the CHAIN-NODE transaction engine.
 
 **Test:**
 1. Transaction encoding/decoding roundtrip
@@ -797,7 +797,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 
 **`go test ./... -race -count=3` must pass consistently.**
 """,
-        "security_task": """Security review the BlockNet transaction engine.
+        "security_task": """Security review the CHAIN-NODE transaction engine.
 
 **CRITICAL checks:**
 1. Signature verification — replay attack prevention (chain_id in signed data?)
@@ -810,7 +810,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 8. Fee market manipulation — can txs be crafted to game the priority queue?
 9. State transitions — are they atomic? Can partial execution corrupt state?
 """,
-        "review_task": """Code review the BlockNet transaction engine.
+        "review_task": """Code review the CHAIN-NODE transaction engine.
 
 **Check:**
 1. Encoding format choice — protobuf vs RLP vs custom. Is it deterministic?
@@ -824,7 +824,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
     {
         "id": 3,
         "name": "Proof-of-History + Proof-of-Stake Consensus",
-        "developer_task": """Implement PoH+PoS consensus for BlockNet.
+        "developer_task": """Implement PoH+PoS consensus for CHAIN-NODE.
 
 **Proof-of-History (PoH):**
 1. Sequential SHA-256 hash chain for verifiable passage of time
@@ -869,7 +869,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 - Block rewards distributed to proposer
 - `go build ./...` + `go vet ./...` pass
 """,
-        "tester_task": """Write tests for BlockNet PoH+PoS consensus.
+        "tester_task": """Write tests for CHAIN-NODE PoH+PoS consensus.
 
 **Test PoH:**
 1. Hash chain generation determinism (same input → same output)
@@ -890,7 +890,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 
 **`go test ./... -race -bench=. -benchtime=3s` for perf + correctness.**
 """,
-        "security_task": """Security review BlockNet consensus layer.
+        "security_task": """Security review CHAIN-NODE consensus layer.
 
 **CRITICAL:**
 1. PoH — can the hash chain be forked or pre-computed to manipulate ordering?
@@ -903,7 +903,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 8. Long-range attacks — any protection against rewriting old history?
 9. Block reward — can rewards be claimed twice?
 """,
-        "review_task": """Code review BlockNet consensus implementation.
+        "review_task": """Code review CHAIN-NODE consensus implementation.
 
 **Check:**
 1. PoH generator — goroutine lifecycle, clean shutdown, no goroutine leaks
@@ -918,7 +918,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
     {
         "id": 4,
         "name": "P2P Network + Block Propagation",
-        "developer_task": """Implement P2P networking for BlockNet using libp2p.
+        "developer_task": """Implement P2P networking for CHAIN-NODE using libp2p.
 
 **Requirements:**
 1. libp2p host with:
@@ -960,7 +960,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 - Chain sync: node C joins late → syncs to head
 - `go build ./...` compiles with protobuf codegen
 """,
-        "tester_task": """Write tests for BlockNet P2P networking.
+        "tester_task": """Write tests for CHAIN-NODE P2P networking.
 
 **Test:**
 1. Host creation + teardown (no goroutine leaks)
@@ -977,7 +977,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 **Use `testing.Short()` to skip slow network tests in CI.**
 **`go test ./... -race` must pass.**
 """,
-        "security_task": """Security review BlockNet P2P layer.
+        "security_task": """Security review CHAIN-NODE P2P layer.
 
 **Focus:**
 1. Eclipse attack — can attacker monopolize all peer slots?
@@ -991,7 +991,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 9. Encryption — Noise protocol correctly configured?
 10. Bootstrap nodes — what if all bootstrap nodes are compromised?
 """,
-        "review_task": """Code review BlockNet P2P networking.
+        "review_task": """Code review CHAIN-NODE P2P networking.
 
 **Check:**
 1. libp2p usage — idiomatic, no deprecated APIs
@@ -1007,7 +1007,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
     {
         "id": 5,
         "name": "RPC API + CLI + State Channel Foundation",
-        "developer_task": """Implement the RPC API and CLI for BlockNet.
+        "developer_task": """Implement the RPC API and CLI for CHAIN-NODE.
 
 **JSON-RPC 2.0 API (served alongside CometBFT RPC):**
 1. Chain queries:
@@ -1058,7 +1058,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 - State channel open + close works with valid signatures
 - `go build ./cmd/habeas` produces single binary with all commands
 """,
-        "tester_task": """Write tests for BlockNet RPC, CLI, and state channels.
+        "tester_task": """Write tests for CHAIN-NODE RPC, CLI, and state channels.
 
 **RPC tests:**
 1. All query methods return correct data
@@ -1084,7 +1084,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 
 **`go test ./... -race` must pass.**
 """,
-        "security_task": """Security review BlockNet RPC, CLI, and state channels.
+        "security_task": """Security review CHAIN-NODE RPC, CLI, and state channels.
 
 **RPC:**
 1. Input validation — can malformed JSON-RPC crash server?
@@ -1104,7 +1104,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 1. Key storage — encrypted at rest? File permissions?
 2. Command injection via arguments?
 """,
-        "review_task": """Code review BlockNet RPC, CLI, and state channels.
+        "review_task": """Code review CHAIN-NODE RPC, CLI, and state channels.
 
 **Check:**
 1. JSON-RPC spec compliance — proper error codes, batch support
@@ -1119,7 +1119,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
     {
         "id": 6,
         "name": "Performance Tuning — 2500 TPS Benchmark",
-        "developer_task": """Performance-tune BlockNet to hit 2500 TPS at 500ms blocks.
+        "developer_task": """Performance-tune CHAIN-NODE to hit 2500 TPS at 500ms blocks.
 
 **Benchmark harness:**
 1. Transaction generator: create N signed txs (transfer type) with sequential nonces
@@ -1148,7 +1148,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 - Memory per block < 50MB
 - No GC pause > 5ms during benchmark
 """,
-        "tester_task": """Validate BlockNet performance benchmarks.
+        "tester_task": """Validate CHAIN-NODE performance benchmarks.
 
 **Run and verify:**
 1. `go test -bench=. -benchmem ./internal/bench/` — capture results
@@ -1162,7 +1162,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 
 **Output:** Performance report with numbers, profiles, and any bottlenecks found.
 """,
-        "security_task": """Security review BlockNet under load.
+        "security_task": """Security review CHAIN-NODE under load.
 
 **Focus:**
 1. Does batch signature verification maintain correctness?
@@ -1172,7 +1172,7 @@ Target: 2500 TPS, 500ms block time, PoH+PoS consensus via CometBFT ABCI.
 5. Transaction ordering under load — fair? Or manipulable?
 6. State commit atomicity — if commit fails mid-block, state consistent?
 """,
-        "review_task": """Code review BlockNet performance optimizations.
+        "review_task": """Code review CHAIN-NODE performance optimizations.
 
 **Check:**
 1. Benchmark methodology — is it realistic? Representative workload?
@@ -1343,7 +1343,7 @@ This is the CORE differentiator.
 # Map project names to phase lists
 PROJECT_PHASES = {
     "apocrypha": PHASES,
-    "chain-node": BLOCK_NET_PHASES,
+    "chain-node": CHAIN_NODE_PHASES,
     "equipa": EQUIPA_PHASES,
     "babel": BABEL_PHASES,
 }
