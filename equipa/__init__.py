@@ -2,6 +2,7 @@
 
 Phase 1 leaf modules: constants, checkpoints, git_ops.
 Phase 2 low-coupling modules: output, messages, parsing, monitoring.
+Phase 3 database layer: db, tasks, lessons, roles.
 All public symbols are re-exported here for backward compatibility.
 
 Copyright 2026 Forgeborn
@@ -151,6 +152,53 @@ from equipa.monitoring import (
     calculate_dynamic_budget,
 )
 
+# --- Database (equipa.db) ---
+from equipa.db import (
+    _get_latest_agent_run_id,
+    bulk_log_agent_actions,
+    classify_error,
+    ensure_schema,
+    get_db_connection,
+    log_agent_action,
+    record_agent_run,
+    update_task_status,
+)
+
+# --- Tasks (equipa.tasks) ---
+from equipa.tasks import (
+    _get_task_status,
+    fetch_next_todo,
+    fetch_project_context,
+    fetch_project_info,
+    fetch_task,
+    fetch_tasks_by_ids,
+    get_task_complexity,
+    resolve_project_dir,
+    verify_task_updated,
+)
+
+# --- Lessons (equipa.lessons) ---
+from equipa.lessons import (
+    _injected_episodes_by_task,
+    format_episodes_for_injection,
+    format_lessons_for_injection,
+    get_relevant_episodes,
+    record_agent_episode,
+    update_episode_injection_count,
+    update_episode_q_values,
+    update_injected_episode_q_values_for_task,
+    update_lesson_injection_count,
+)
+
+# --- Roles (equipa.roles) ---
+from equipa.roles import (
+    _accumulate_cost,
+    _apply_cost_totals,
+    _discover_roles,
+    get_role_model,
+    get_role_turns,
+)
+
 __all__ = [
     # Constants
     "AUTOFIX_COST_LIMIT",
@@ -273,4 +321,39 @@ __all__ = [
     "LoopDetector",
     "calculate_dynamic_budget",
     "adjust_dynamic_budget",
+    # Database
+    "get_db_connection",
+    "ensure_schema",
+    "record_agent_run",
+    "_get_latest_agent_run_id",
+    "update_task_status",
+    "classify_error",
+    "log_agent_action",
+    "bulk_log_agent_actions",
+    # Tasks
+    "fetch_task",
+    "fetch_next_todo",
+    "fetch_project_context",
+    "_get_task_status",
+    "fetch_project_info",
+    "fetch_tasks_by_ids",
+    "get_task_complexity",
+    "verify_task_updated",
+    "resolve_project_dir",
+    # Lessons
+    "format_lessons_for_injection",
+    "update_lesson_injection_count",
+    "_injected_episodes_by_task",
+    "get_relevant_episodes",
+    "format_episodes_for_injection",
+    "record_agent_episode",
+    "update_episode_injection_count",
+    "update_episode_q_values",
+    "update_injected_episode_q_values_for_task",
+    # Roles
+    "get_role_turns",
+    "get_role_model",
+    "_discover_roles",
+    "_accumulate_cost",
+    "_apply_cost_totals",
 ]

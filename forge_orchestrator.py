@@ -117,6 +117,47 @@ from equipa.monitoring import (  # noqa: E402
     calculate_dynamic_budget,
 )
 
+# Phase 3 modular imports — db, tasks, lessons, roles
+from equipa.db import (  # noqa: E402
+    _get_latest_agent_run_id,
+    bulk_log_agent_actions,
+    classify_error,
+    ensure_schema,
+    get_db_connection,
+    log_agent_action,
+    record_agent_run,
+    update_task_status,
+)
+from equipa.tasks import (  # noqa: E402
+    _get_task_status,
+    fetch_next_todo,
+    fetch_project_context,
+    fetch_project_info,
+    fetch_task,
+    fetch_tasks_by_ids,
+    get_task_complexity,
+    resolve_project_dir,
+    verify_task_updated,
+)
+from equipa.lessons import (  # noqa: E402
+    _injected_episodes_by_task,
+    format_episodes_for_injection,
+    format_lessons_for_injection,
+    get_relevant_episodes,
+    record_agent_episode,
+    update_episode_injection_count,
+    update_episode_q_values,
+    update_injected_episode_q_values_for_task,
+    update_lesson_injection_count,
+)
+from equipa.roles import (  # noqa: E402
+    _accumulate_cost,
+    _apply_cost_totals,
+    _discover_roles,
+    get_role_model,
+    get_role_turns,
+)
+
 # Import ForgeSmith functions for lesson injection
 try:
     from forgesmith import get_relevant_lessons
@@ -345,21 +386,7 @@ def verify_skill_integrity():
     return True
 
 
-def _accumulate_cost(result, label=None, output=None):
-    """Extract cost from an agent result, estimating if actual cost is None.
-
-    Returns the cost amount (float). Logs estimation when applicable.
-    """
-    if result.get("cost"):
-        return result["cost"]
-    num_turns = result.get("num_turns", 0)
-    if num_turns:
-        estimated = num_turns * COST_ESTIMATE_PER_TURN
-        if label and output is not None:
-            log(f"  {label} cost=None, estimating ${estimated:.2f} "
-                f"({num_turns} turns * ${COST_ESTIMATE_PER_TURN})", output)
-        return estimated
-    return 0.0
+# _accumulate_cost extracted to equipa/roles.py
 
 # --- Provider Abstraction (Claude / Ollama) ---
 
@@ -451,28 +478,7 @@ def load_config():
         _equipa_constants.PROMPTS_DIR = PROMPTS_DIR
 
 
-def _discover_roles():
-    """Dynamically build ROLE_PROMPTS from .md files in the prompts directory.
-
-    Scans PROMPTS_DIR for markdown files (excluding _common.md) and maps
-    each filename stem to its full path.  Falls back to the hardcoded
-    ROLE_PROMPTS dict if the prompts directory doesn't exist.
-    """
-    global ROLE_PROMPTS
-
-    if not PROMPTS_DIR.exists():
-        return  # keep hardcoded dict
-
-    discovered = {}
-    for md_file in sorted(PROMPTS_DIR.glob("*.md")):
-        if md_file.name.startswith("_"):
-            continue  # skip _common.md and similar
-        role_name = md_file.stem  # e.g. "developer", "security-reviewer"
-        discovered[role_name] = md_file
-
-    if discovered:
-        ROLE_PROMPTS = discovered
-        _equipa_constants.ROLE_PROMPTS = ROLE_PROMPTS
+# _discover_roles extracted to equipa/roles.py
 
 
 def _handle_add_project(name, project_dir):
@@ -533,144 +539,10 @@ _discover_roles()
 
 
 # --- Database Functions ---
-
-def get_db_connection(write=False):
-    """Open a connection to TheForge database.
-
-    Args:
-        write: If True, open in read-write mode. Default is read-only.
-    """
-    if not THEFORGE_DB.exists():
-        raise FileNotFoundError(f"TheForge database not found at {THEFORGE_DB}")
-
-    if write:
-        conn = sqlite3.connect(str(THEFORGE_DB))
-    else:
-        uri = f"file:{THEFORGE_DB}?mode=ro"
-        conn = sqlite3.connect(uri, uri=True)
-    conn.row_factory = sqlite3.Row
-    return conn
+# get_db_connection, update_task_status extracted to equipa/db.py
 
 
-def update_task_status(task_id, outcome, output=None):
-    """Update task status in TheForge based on dev-test outcome.
-
-    Called by the orchestrator after run_dev_test_loop completes, so agents
-    don't need to handle DB updates themselves (they often run out of turns).
-
-    Maps outcomes to statuses:
-        tests_passed, no_tests -> done
-        Everything else (blocked, failed, timeout, no_progress) -> blocked
-    """
-    success_outcomes = ("tests_passed", "no_tests")
-    new_status = "done" if outcome in success_outcomes else "blocked"
-
-    # Orchestrator is authoritative — always set status based on outcome
-    conn = get_db_connection(write=True)
-    try:
-        row = conn.execute(
-            "SELECT status FROM tasks WHERE id = ?", (task_id,)
-        ).fetchone()
-        if not row:
-            log(f"  [DB] Task {task_id} not found — skipping status update.", output)
-            return
-        current = row["status"]
-
-        conn.execute(
-            "UPDATE tasks SET status = ?, completed_at = CASE WHEN ? = 'done' THEN datetime('now') ELSE completed_at END WHERE id = ?",
-            (new_status, new_status, task_id),
-        )
-        conn.commit()
-        log(f"  [DB] Task {task_id}: {current} -> {new_status} (outcome: {outcome})", output)
-    except Exception as e:
-        log(f"  [DB] ERROR updating task {task_id}: {e}", output)
-    finally:
-        conn.close()
-
-
-def record_agent_run(task, result, outcome, role="developer", model="opus",
-                     max_turns=25, cycle_number=1, continuation_count=0, output=None,
-                     prompt_version=None):
-    """Record agent execution telemetry to TheForge agent_runs table.
-
-    Never crashes the orchestrator — all errors are logged and swallowed.
-    Reads turns_allocated from result dict if available (set by dynamic budget system).
-    prompt_version: which prompt version was used (e.g., "baseline", "v2").
-        If None, reads from _last_prompt_version[role].
-    """
-    try:
-        task_id = task.get("id") if isinstance(task, dict) else task
-        project_id = task.get("project_id") if isinstance(task, dict) else None
-        complexity = get_task_complexity(task) if isinstance(task, dict) else None
-        success = 1 if outcome in ("tests_passed", "no_tests") else 0
-        num_turns = result.get("num_turns", 0) if isinstance(result, dict) else 0
-        duration = result.get("duration", 0) if isinstance(result, dict) else 0
-        cost = result.get("cost") if isinstance(result, dict) else None
-        errors = result.get("errors", []) if isinstance(result, dict) else []
-        # Dynamic budget: read turns_allocated from result (set by run_dev_test_loop)
-        turns_allocated = result.get("turns_allocated") if isinstance(result, dict) else None
-        error_type = None
-        error_summary = None
-
-        # Resolve prompt version from A/B testing tracker if not explicitly passed
-        if prompt_version is None:
-            prompt_version = _last_prompt_version.get(role, "baseline")
-
-        # Early termination gets priority for error_type/error_summary
-        if isinstance(result, dict) and result.get("early_terminated"):
-            error_type = "early_terminated"
-            error_summary = result.get("early_term_reason", "early termination")[:500]
-        elif errors:
-            error_summary = errors[0][:500] if errors[0] else None
-            if "timed out" in (error_summary or "").lower():
-                error_type = "timeout"
-            elif "max_turns" in (error_summary or "").lower():
-                error_type = "max_turns"
-            elif "loop detected" in (error_summary or "").lower():
-                error_type = "loop_detected"
-            else:
-                error_type = "agent_error"
-        files_changed = result.get("files_changed_count", 0) if isinstance(result, dict) else 0
-
-        conn = get_db_connection(write=True)
-        conn.execute(
-            """INSERT INTO agent_runs
-               (task_id, project_id, role, model, complexity, num_turns,
-                max_turns_allowed, duration_seconds, cost_usd, outcome,
-                success, cycle_number, continuation_count, files_changed_count,
-                error_type, error_summary, turns_allocated, prompt_version)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (task_id, project_id, role, model, complexity, num_turns,
-             max_turns, duration, cost, outcome,
-             success, cycle_number, continuation_count, files_changed,
-             error_type, error_summary, turns_allocated, prompt_version),
-        )
-        conn.commit()
-        conn.close()
-        budget_info = f", allocated={turns_allocated}" if turns_allocated else ""
-        version_info = f", prompt={prompt_version}" if prompt_version != "baseline" else ""
-        log(f"  [Telemetry] Recorded agent run: role={role}, outcome={outcome}, "
-            f"turns={num_turns}/{max_turns}{budget_info}{version_info}, "
-            f"duration={duration:.0f}s", output)
-    except Exception as e:
-        log(f"  [Telemetry] WARNING: Failed to record agent run: {e}", output)
-
-
-def _get_latest_agent_run_id(task_id):
-    """Get the most recently inserted agent_run ID for a task.
-
-    Returns the ID or None if not found. Never raises.
-    """
-    try:
-        conn = get_db_connection()
-        row = conn.execute(
-            "SELECT id FROM agent_runs WHERE task_id = ? ORDER BY id DESC LIMIT 1",
-            (task_id,),
-        ).fetchone()
-        conn.close()
-        return row["id"] if row else None
-    except Exception:
-        return None
+# record_agent_run, _get_latest_agent_run_id extracted to equipa/db.py
 
 
 def run_quality_scoring(task, result, outcome, role, output=None, dispatch_config=None):
@@ -727,133 +599,7 @@ REFLEXION_PROMPT = (
 INITIAL_Q_VALUE = 0.5
 
 
-_SCHEMA_ENSURED = False
-
-
-def ensure_schema():
-    """Create all agent tables if they do not exist (called once at startup).
-
-    Safety net — schema is primarily managed by db_migrate.py.
-    """
-    global _SCHEMA_ENSURED
-    if _SCHEMA_ENSURED:
-        return
-    try:
-        # get_db_connection raises FileNotFoundError if the DB file does not
-        # exist.  For ensure_schema that is fine in production (db_migrate.py
-        # creates the file first), but in test worktrees the DB may start
-        # empty or absent.  Fall back to sqlite3.connect (which auto-creates
-        # the file) when the DB does not exist yet.
-        try:
-            conn = get_db_connection(write=True)
-        except FileNotFoundError:
-            conn = sqlite3.connect(str(THEFORGE_DB))
-            conn.row_factory = sqlite3.Row
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS agent_episodes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task_id INTEGER, role TEXT, task_type TEXT,
-                project_id INTEGER, approach_summary TEXT,
-                turns_used INTEGER, outcome TEXT, error_patterns TEXT,
-                reflection TEXT, q_value REAL DEFAULT 0.5,
-                times_injected INTEGER DEFAULT 0,
-                created_at TEXT DEFAULT (datetime('now'))
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS lessons_learned (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_id INTEGER,
-                role TEXT,
-                error_type TEXT,
-                error_signature TEXT,
-                lesson TEXT NOT NULL,
-                source TEXT DEFAULT 'forgesmith',
-                times_seen INTEGER DEFAULT 1,
-                times_injected INTEGER DEFAULT 0,
-                effectiveness_score REAL,
-                active INTEGER DEFAULT 1,
-                created_at TEXT DEFAULT (datetime('now')),
-                updated_at TEXT DEFAULT (datetime('now'))
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS agent_messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task_id INTEGER NOT NULL, cycle_number INTEGER NOT NULL,
-                from_role TEXT NOT NULL, to_role TEXT NOT NULL,
-                message_type TEXT NOT NULL, content TEXT NOT NULL,
-                read_by_cycle INTEGER,
-                created_at TEXT DEFAULT (datetime('now'))
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS agent_actions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task_id INTEGER NOT NULL, run_id INTEGER,
-                cycle_number INTEGER NOT NULL, role TEXT NOT NULL,
-                turn_number INTEGER NOT NULL, tool_name TEXT NOT NULL,
-                tool_input_preview TEXT, input_hash TEXT,
-                output_length INTEGER, success INTEGER NOT NULL DEFAULT 1,
-                error_type TEXT, error_summary TEXT, duration_ms INTEGER,
-                created_at TEXT DEFAULT (datetime('now'))
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS forgesmith_runs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_id TEXT NOT NULL,
-                started_at TEXT NOT NULL DEFAULT (datetime('now')),
-                completed_at TEXT,
-                agent_runs_analyzed INTEGER DEFAULT 0,
-                changes_made INTEGER DEFAULT 0,
-                summary TEXT,
-                mode TEXT DEFAULT 'auto'
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS forgesmith_changes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_id TEXT NOT NULL,
-                change_type TEXT NOT NULL,
-                target_file TEXT,
-                old_value TEXT,
-                new_value TEXT,
-                rationale TEXT NOT NULL,
-                evidence TEXT,
-                effectiveness_score REAL,
-                reverted_at TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS rubric_scores (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                agent_run_id INTEGER NOT NULL,
-                task_id INTEGER,
-                project_id INTEGER,
-                role TEXT NOT NULL,
-                rubric_version INTEGER DEFAULT 1,
-                criteria_scores TEXT NOT NULL,
-                total_score REAL NOT NULL,
-                max_possible REAL NOT NULL,
-                normalized_score REAL NOT NULL,
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
-            )
-        """)
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_agent_actions_task "
-            "ON agent_actions(task_id, cycle_number)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_agent_actions_tool "
-            "ON agent_actions(tool_name, success)"
-        )
-        conn.commit()
-        conn.close()
-        _SCHEMA_ENSURED = True
-    except Exception as e:
-        print(f"  [Schema] WARNING: Could not ensure tables: {e}")
+# _SCHEMA_ENSURED, ensure_schema extracted to equipa/db.py
 
 
 # --- Inter-Agent Message Channel ---
@@ -867,85 +613,7 @@ def ensure_schema():
 
 
 
-def classify_error(error_text):
-    """Classify an error string into a category for the error_type field.
-
-    Returns one of: timeout, file_not_found, permission, syntax_error,
-    import_error, test_failure, unknown.
-    """
-    if not error_text:
-        return "unknown"
-    lower = error_text.lower()
-    if "timed out" in lower:
-        return "timeout"
-    if "no such file" in lower or "not found" in lower:
-        return "file_not_found"
-    if "permission denied" in lower:
-        return "permission"
-    if "syntaxerror" in lower:
-        return "syntax_error"
-    if "modulenotfounderror" in lower or "importerror" in lower:
-        return "import_error"
-    if "failed" in lower or "assertionerror" in lower:
-        return "test_failure"
-    return "unknown"
-
-
-def log_agent_action(task_id, run_id, cycle, role, turn, tool_name,
-                     tool_input_preview, input_hash, output_length,
-                     success, error_type, error_summary, duration_ms):
-    """Insert a single agent action record into the database.
-
-    Never crashes the orchestrator — all errors are logged and swallowed.
-    """
-    try:
-        conn = get_db_connection(write=True)
-        conn.execute(
-            """INSERT INTO agent_actions
-               (task_id, run_id, cycle_number, role, turn_number, tool_name,
-                tool_input_preview, input_hash, output_length, success,
-                error_type, error_summary, duration_ms)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (task_id, run_id, cycle, role, turn, tool_name,
-             tool_input_preview, input_hash, output_length,
-             1 if success else 0, error_type, error_summary, duration_ms),
-        )
-        conn.commit()
-        conn.close()
-    except Exception:
-        pass  # Never crash the orchestrator for telemetry
-
-
-def bulk_log_agent_actions(action_log, task_id, run_id, cycle, role):
-    """Bulk insert all actions from an action_log list into the database.
-
-    More efficient than individual inserts — uses a single transaction.
-    Never crashes the orchestrator.
-    """
-    if not action_log:
-        return
-    try:
-        ensure_schema()
-        conn = get_db_connection(write=True)
-        conn.executemany(
-            """INSERT INTO agent_actions
-               (task_id, run_id, cycle_number, role, turn_number, tool_name,
-                tool_input_preview, input_hash, output_length, success,
-                error_type, error_summary, duration_ms)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            [
-                (task_id, run_id, cycle, role, a["turn"], a["tool"],
-                 a.get("input_preview"), a.get("input_hash"),
-                 a.get("output_length"), 1 if a.get("success", True) else 0,
-                 a.get("error_type"), a.get("error_summary"),
-                 a.get("duration_ms"))
-                for a in action_log
-            ],
-        )
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"  [ActionLog] WARNING: Failed to bulk insert actions: {e}")
+# classify_error, log_agent_action, bulk_log_agent_actions extracted to equipa/db.py
 
 
 # _extract_marker_value, parse_reflection, parse_approach_summary,
@@ -958,63 +626,7 @@ def bulk_log_agent_actions(action_log, task_id, run_id, cycle, role):
 # parse_error_patterns, compute_initial_q_value extracted to equipa/parsing.py
 
 
-def record_agent_episode(task, result, outcome, role="developer", output=None):
-    """Store a Reflexion episode in the agent_episodes table.
-
-    Extracts reflection from agent output. If no reflection found in
-    the output, records the episode with a null reflection (the
-    orchestrator will attempt a standalone reflexion call separately).
-
-    Never crashes the orchestrator — all errors are logged and swallowed.
-    """
-    try:
-        ensure_schema()
-
-        task_id = task.get("id") if isinstance(task, dict) else task
-        project_id = task.get("project_id") if isinstance(task, dict) else None
-        task_type = task.get("task_type") or task.get("role") or role if isinstance(task, dict) else role
-        result_text = result.get("result_text", "") if isinstance(result, dict) else ""
-        num_turns = result.get("num_turns", 0) if isinstance(result, dict) else 0
-
-        reflection = parse_reflection(result_text)
-        approach = parse_approach_summary(result_text)
-        error_patterns = parse_error_patterns(result, outcome=outcome, result_text=result_text)
-        q_value = compute_initial_q_value(outcome)
-
-        conn = get_db_connection(write=True)
-        conn.execute(
-            """INSERT INTO agent_episodes
-               (task_id, role, task_type, project_id, approach_summary,
-                turns_used, outcome, error_patterns, reflection, q_value)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (task_id, role, task_type, project_id, approach,
-             num_turns, outcome, error_patterns, reflection, q_value),
-        )
-        conn.commit()
-        conn.close()
-
-        # Log failure classification if present
-        failure_class_info = ""
-        if error_patterns:
-            try:
-                parsed = json.loads(error_patterns)
-                fc = parsed.get("failure_class", "unknown")
-                conf = parsed.get("confidence", "?")
-                secondary = parsed.get("secondary_classes", [])
-                sec_str = f" +{','.join(secondary)}" if secondary else ""
-                failure_class_info = f" [class={fc}{sec_str}, conf={conf}]"
-            except (json.JSONDecodeError, TypeError):
-                pass  # legacy plain-text format
-
-        if reflection:
-            # Truncate for log display
-            preview = reflection[:120] + "..." if len(reflection) > 120 else reflection
-            log(f"  [Reflexion] Recorded episode{failure_class_info} with reflection: {preview}", output)
-        else:
-            log(f"  [Reflexion] Recorded episode{failure_class_info} (no reflection in output)", output)
-
-    except Exception as e:
-        log(f"  [Reflexion] WARNING: Failed to record episode: {e}", output)
+# record_agent_episode extracted to equipa/lessons.py
 
 
 async def run_reflexion_agent(task, result, outcome, role="developer", output=None):
@@ -1117,164 +729,8 @@ async def maybe_run_reflexion(task, result, outcome, role="developer", output=No
         await run_reflexion_agent(task, result, outcome, role=role, output=output)
 
 
-def fetch_task(task_id):
-    """Fetch a specific task by ID, including project info."""
-    conn = get_db_connection()
-    try:
-        row = conn.execute(
-            """
-            SELECT t.*, p.name as project_name,
-                   COALESCE(p.codename, LOWER(REPLACE(p.name, ' ', ''))) as project_codename
-            FROM tasks t
-            LEFT JOIN projects p ON t.project_id = p.id
-            WHERE t.id = ?
-            """,
-            (task_id,),
-        ).fetchone()
-        return dict(row) if row else None
-    finally:
-        conn.close()
-
-
-def fetch_next_todo(project_id):
-    """Find the highest-priority todo task for a project."""
-    conn = get_db_connection()
-    try:
-        rows = conn.execute(
-            """
-            SELECT t.*, p.name as project_name,
-                   COALESCE(p.codename, LOWER(REPLACE(p.name, ' ', ''))) as project_codename
-            FROM tasks t
-            LEFT JOIN projects p ON t.project_id = p.id
-            WHERE t.project_id = ? AND t.status = 'todo'
-            ORDER BY t.created_at ASC
-            """,
-            (project_id,),
-        ).fetchall()
-
-        if not rows:
-            return None
-
-        # Sort by priority text mapping (critical > high > medium > low)
-        tasks = [dict(r) for r in rows]
-        tasks.sort(
-            key=lambda t: PRIORITY_ORDER.get(
-                str(t.get("priority", "low")).lower(), 0
-            ),
-            reverse=True,
-        )
-        return tasks[0]
-    finally:
-        conn.close()
-
-
-def fetch_project_context(project_id):
-    """Get recent project context: last session, open questions, recent decisions."""
-    conn = get_db_connection()
-    try:
-        context = {}
-
-        # Last session notes
-        row = conn.execute(
-            """
-            SELECT summary, next_steps, session_date
-            FROM session_notes
-            WHERE project_id = ?
-            ORDER BY session_date DESC
-            LIMIT 1
-            """,
-            (project_id,),
-        ).fetchone()
-        context["last_session"] = dict(row) if row else None
-
-        # Open questions
-        rows = conn.execute(
-            """
-            SELECT question, context
-            FROM open_questions
-            WHERE project_id = ? AND resolved = 0
-            """,
-            (project_id,),
-        ).fetchall()
-        context["open_questions"] = [dict(r) for r in rows]
-
-        # Recent decisions
-        rows = conn.execute(
-            """
-            SELECT decision, rationale, decided_at
-            FROM decisions
-            WHERE project_id = ?
-            ORDER BY decided_at DESC
-            LIMIT 5
-            """,
-            (project_id,),
-        ).fetchall()
-        context["recent_decisions"] = [dict(r) for r in rows]
-
-        return context
-    finally:
-        conn.close()
-
-
-def _get_task_status(task_id):
-    """Quick read of task status string from DB."""
-    conn = get_db_connection()
-    try:
-        row = conn.execute(
-            "SELECT status FROM tasks WHERE id = ?",
-            (task_id,),
-        ).fetchone()
-        return row["status"] if row else None
-    finally:
-        conn.close()
-
-
-def fetch_project_info(project_id):
-    """Get project name and codename from project_id."""
-    conn = get_db_connection()
-    try:
-        row = conn.execute(
-            """
-            SELECT id, name,
-                   COALESCE(codename, LOWER(REPLACE(name, ' ', ''))) as codename
-            FROM projects
-            WHERE id = ?
-            """,
-            (project_id,),
-        ).fetchone()
-        return dict(row) if row else None
-    finally:
-        conn.close()
-
-
-def fetch_tasks_by_ids(task_ids):
-    """Fetch multiple tasks by their IDs.
-
-    Returns a list of task dicts in the same order as the input IDs.
-    Missing tasks are skipped.
-    """
-    if not task_ids:
-        return []
-
-    conn = get_db_connection()
-    try:
-        placeholders = ", ".join("?" for _ in task_ids)
-        rows = conn.execute(
-            f"""
-            SELECT t.*, p.name as project_name,
-                   COALESCE(p.codename, LOWER(REPLACE(p.name, ' ', ''))) as project_codename
-            FROM tasks t
-            LEFT JOIN projects p ON t.project_id = p.id
-            WHERE t.id IN ({placeholders})
-            """,
-            task_ids,
-        ).fetchall()
-
-        # Build a dict keyed by ID for ordering
-        by_id = {row["id"]: dict(row) for row in rows}
-        return [by_id[tid] for tid in task_ids if tid in by_id]
-    finally:
-        conn.close()
+# fetch_task, fetch_next_todo, fetch_project_context, _get_task_status,
+# fetch_project_info, fetch_tasks_by_ids extracted to equipa/tasks.py
 
 
 # --- Prompt Building ---
@@ -1353,318 +809,17 @@ def build_task_prompt(task, project_context, project_dir, delimiter=None):
 # _trim_prompt_section extracted to equipa/parsing.py
 
 
-def format_lessons_for_injection(lessons, delimiter=None):
-    """Format lessons_learned for injection into agent prompts.
-
-    Sanitizes each lesson's content before formatting to prevent prompt
-    injection (PM-24, PM-28). Wraps the entire output in <task-input> tags
-    AND unpredictable delimiter markers so agents treat lesson content as
-    data, not instructions.
-
-    Args:
-        lessons: List of lesson dicts from get_relevant_lessons
-        delimiter: Unpredictable boundary token (from _make_untrusted_delimiter)
-
-    Returns:
-        Formatted string with lessons wrapped in isolation markers.
-    """
-    if not lessons:
-        return ""
-
-    lines = []
-    for lesson in lessons:
-        # Sanitize lesson text before injecting into prompt
-        safe_lesson = sanitize_lesson_content(lesson['lesson'])
-        if not safe_lesson:
-            continue
-        lines.append(f"- {safe_lesson}")
-        # Sanitize error signature context too
-        if lesson.get('error_signature'):
-            safe_sig = sanitize_error_signature(lesson['error_signature'])
-            lines.append(f"  (Error: {safe_sig}, seen {lesson['times_seen']}x)")
-
-    formatted = "\n".join(lines)
-
-    # Wrap in task-input tags so agents treat this as data (PM-24)
-    wrapped = wrap_lessons_in_task_input(formatted)
-    if not wrapped:
-        return ""
-
-    # Always prepend section heading
-    header = "## Lessons from Previous Runs\n"
-
-    # Add unpredictable delimiter for defense-in-depth (EQ-24)
-    if delimiter:
-        # Wrap the lessons block with delimiter markers, then nest inside task-input
-        wrapped = f'{header}<task-input type="lessons" trust="derived">\n{wrap_untrusted(wrapped, delimiter)}\n</task-input>'
-    else:
-        wrapped = f'{header}{wrapped}'
-
-    return wrapped
-
-
-def update_lesson_injection_count(lesson_ids):
-    """Increment times_injected counter for the given lesson IDs.
-
-    Args:
-        lesson_ids: List of lesson IDs to update
-    """
-    if not lesson_ids:
-        return
-
-    try:
-        conn = sqlite3.connect(THEFORGE_DB)
-        placeholders = ",".join("?" * len(lesson_ids))
-        conn.execute(
-            f"UPDATE lessons_learned SET times_injected = times_injected + 1 WHERE id IN ({placeholders})",
-            lesson_ids
-        )
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        # Don't fail the orchestrator if lesson update fails
-        print(f"Warning: Failed to update lesson injection count: {e}")
+# format_lessons_for_injection, update_lesson_injection_count extracted to equipa/lessons.py
 
 
 # --- Episode Injection (MemRL pattern) ---
-
-# Track which episode IDs were injected per task_id, so we can update q_values
-# after the task completes. Keyed by task_id, value is list of episode IDs.
-_injected_episodes_by_task = {}
+# _injected_episodes_by_task, get_relevant_episodes, format_episodes_for_injection,
+# update_episode_injection_count, update_episode_q_values,
+# update_injected_episode_q_values_for_task extracted to equipa/lessons.py
 
 # Track which prompt version was used per role (for A/B testing telemetry).
 # Set by build_system_prompt(), read by record_agent_run().
 _last_prompt_version = {}
-
-def get_relevant_episodes(role, project_id, task_type=None, min_q_value=0.3, limit=3,
-                          task_description=None):
-    """Fetch relevant past episodes for injection into agent prompts.
-
-    Matches by: same role + same project + optionally similar task_type.
-    Filters by q_value > min_q_value (only inject useful experiences).
-
-    Scoring combines:
-    - q_value (base quality signal)
-    - Task description keyword overlap (if task_description provided)
-    - Recency weighting (episodes from last 7 days weighted 2x)
-
-    Args:
-        role: Agent role (e.g. 'developer', 'tester')
-        project_id: Project ID to match episodes from
-        task_type: Optional task type for similarity matching
-        min_q_value: Minimum q_value threshold (default 0.3)
-        limit: Maximum episodes to return (default 3)
-        task_description: Optional task description for keyword similarity scoring
-
-    Returns:
-        List of episode dicts with id, approach_summary, outcome, reflection, q_value
-    """
-    from datetime import datetime, timedelta
-
-    try:
-        conn = get_db_connection()
-        # Fetch more candidates than needed so we can re-rank
-        fetch_limit = max(limit * 3, 10)
-
-        # Primary match: same role + same project + q_value above threshold + has reflection
-        rows = conn.execute(
-            """SELECT id, task_id, task_type, project_id, approach_summary, outcome,
-                      reflection, q_value, turns_used, created_at
-               FROM agent_episodes
-               WHERE role = ? AND project_id = ? AND q_value > ?
-                 AND reflection IS NOT NULL AND reflection != ''
-               ORDER BY q_value DESC, created_at DESC
-               LIMIT ?""",
-            (role, project_id, min_q_value, fetch_limit),
-        ).fetchall()
-
-        episodes = [dict(r) for r in rows]
-
-        # If we got fewer than limit, try matching by role + task_type across projects
-        if len(episodes) < limit and task_type:
-            existing_ids = {e["id"] for e in episodes}
-            remaining = limit - len(episodes)
-            cross_rows = conn.execute(
-                """SELECT id, task_id, task_type, project_id, approach_summary, outcome,
-                          reflection, q_value, turns_used, created_at
-                   FROM agent_episodes
-                   WHERE role = ? AND task_type = ? AND q_value > ?
-                     AND reflection IS NOT NULL AND reflection != ''
-                   ORDER BY q_value DESC, created_at DESC
-                   LIMIT ?""",
-                (role, task_type, min_q_value, remaining + len(existing_ids)),
-            ).fetchall()
-            for r in cross_rows:
-                if dict(r)["id"] not in existing_ids:
-                    episodes.append(dict(r))
-                    existing_ids.add(dict(r)["id"])
-
-        conn.close()
-
-        # Score and re-rank episodes
-        now = datetime.now()
-        seven_days_ago = now - timedelta(days=7)
-
-        for ep in episodes:
-            score = ep.get("q_value", 0.5)
-
-            # Recency weighting: episodes from last 7 days get 2x weight
-            created = ep.get("created_at")
-            if created:
-                try:
-                    ep_date = datetime.fromisoformat(created.replace("Z", "+00:00").split("+")[0])
-                    if ep_date >= seven_days_ago:
-                        score *= 2.0
-                except (ValueError, AttributeError):
-                    pass  # Can't parse date, skip recency bonus
-
-            # Task description keyword overlap scoring
-            if task_description:
-                ep_text = (ep.get("approach_summary", "") or "") + " " + (ep.get("reflection", "") or "")
-                overlap = compute_keyword_overlap(task_description, ep_text)
-                # Boost score by up to 50% based on keyword overlap
-                score *= (1.0 + overlap * 0.5)
-
-            ep["_relevance_score"] = score
-
-        # Sort by relevance score descending
-        episodes.sort(key=lambda e: e.get("_relevance_score", 0), reverse=True)
-
-        # Return top N, strip internal scoring field
-        result = episodes[:limit]
-        for ep in result:
-            ep.pop("_relevance_score", None)
-            ep.pop("created_at", None)
-
-        return result
-    except Exception as e:
-        print(f"Warning: Failed to fetch relevant episodes: {e}")
-        return []
-
-
-def format_episodes_for_injection(episodes, delimiter=None):
-    """Format agent episodes for injection into agent prompts.
-
-    Args:
-        episodes: List of episode dicts from get_relevant_episodes
-        delimiter: Unpredictable boundary token (from _make_untrusted_delimiter)
-
-    Returns:
-        Formatted string under "## Past Experience" heading (2-3 sentences each),
-        wrapped in untrusted content markers when delimiter is provided.
-    """
-    if not episodes:
-        return ""
-
-    lines = ["## Past Experience", ""]
-    for ep in episodes:
-        summary = ep.get("approach_summary") or "No summary"
-        outcome = ep.get("outcome", "unknown")
-        reflection = ep.get("reflection") or "No lesson recorded"
-        # Truncate to keep injected text short
-        if len(summary) > 120:
-            summary = summary[:117] + "..."
-        if len(reflection) > 150:
-            reflection = reflection[:147] + "..."
-        lines.append(
-            f"- Previous similar task: {summary}. "
-            f"Outcome: {outcome}. Lesson: {reflection}"
-        )
-
-    formatted = "\n".join(lines)
-
-    # Wrap in unpredictable delimiter for defense-in-depth (EQ-24)
-    if delimiter:
-        formatted = (
-            f"## Past Experience\n\n"
-            f'<task-input type="episodes" trust="derived">\n'
-            f"{wrap_untrusted(chr(10).join(lines[2:]), delimiter)}\n"
-            f"</task-input>"
-        )
-
-    return formatted
-
-
-def update_episode_injection_count(episode_ids):
-    """Increment times_injected counter for the given episode IDs.
-
-    Args:
-        episode_ids: List of episode IDs that were injected into a prompt
-    """
-    if not episode_ids:
-        return
-
-    try:
-        ensure_schema()
-        conn = get_db_connection(write=True)
-        placeholders = ",".join("?" * len(episode_ids))
-        conn.execute(
-            f"UPDATE agent_episodes SET times_injected = times_injected + 1 WHERE id IN ({placeholders})",
-            episode_ids
-        )
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"Warning: Failed to update episode injection count: {e}")
-
-
-def update_episode_q_values(injected_episode_ids, task_succeeded):
-    """Update q_values of previously injected episodes based on task outcome.
-
-    Implements the MemRL reward signal:
-    - If task succeeded and injected episode was useful: q_value += 0.1
-    - If task failed despite injected episode: q_value -= 0.05
-    - Q-values are bounded to [0.0, 1.0]
-
-    Args:
-        injected_episode_ids: List of episode IDs that were injected before this task
-        task_succeeded: Whether the task completed successfully
-    """
-    if not injected_episode_ids:
-        return
-
-    try:
-        conn = get_db_connection(write=True)
-        if task_succeeded:
-            delta = 0.1
-        else:
-            delta = -0.05
-
-        for ep_id in injected_episode_ids:
-            # Bounded update: clamp to [0.0, 1.0]
-            conn.execute(
-                """UPDATE agent_episodes
-                   SET q_value = MIN(1.0, MAX(0.0, q_value + ?))
-                   WHERE id = ?""",
-                (delta, ep_id),
-            )
-
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"Warning: Failed to update episode q_values: {e}")
-
-
-def update_injected_episode_q_values_for_task(task_id, outcome, output=None):
-    """Look up which episodes were injected for a task and update their q_values.
-
-    Called after task completion. Uses the _injected_episodes_by_task tracker
-    to find which episodes were injected, then applies the MemRL reward signal.
-
-    Args:
-        task_id: The task ID that just completed
-        outcome: The task outcome string (e.g. 'tests_passed', 'developer_failed')
-        output: Optional output buffer for logging
-    """
-    ep_ids = _injected_episodes_by_task.pop(task_id, [])
-    if not ep_ids:
-        return
-
-    task_succeeded = outcome in ("tests_passed", "no_tests")
-    update_episode_q_values(ep_ids, task_succeeded)
-
-    delta = "+0.1" if task_succeeded else "-0.05"
-    log(f"  [MemRL] Updated q_values ({delta}) for {len(ep_ids)} injected episodes: {ep_ids}", output)
 
 
 def build_system_prompt(task, project_context, project_dir, role="developer",
@@ -1866,103 +1021,8 @@ def build_system_prompt(task, project_context, project_dir, role="developer",
     return prompt
 
 
-def get_task_complexity(task):
-    """Resolve task complexity.
-
-    Checks the task's 'complexity' field first (set in DB), then infers from
-    description length as a fallback.
-
-    Returns one of: 'simple', 'medium', 'complex', 'epic'
-    """
-    # Explicit complexity in the task record
-    explicit = ((task or {}).get("complexity") or "").strip().lower()
-    if explicit in COMPLEXITY_MULTIPLIERS:
-        return explicit
-
-    # Infer from description length
-    desc = (task or {}).get("description", "") or ""
-    desc_len = len(desc)
-    if desc_len < 100:
-        return "simple"
-    elif desc_len < 400:
-        return "medium"
-    elif desc_len < 800:
-        return "complex"
-    else:
-        return "epic"
-
-
-def get_role_turns(role, args, config=None, task=None):
-    """Resolve max turns for a given role, adjusted by task complexity.
-
-    Priority: dispatch config per-role > CLI --max-turns (if non-default) > DEFAULT_ROLE_TURNS
-    Then applies complexity multiplier from the task.
-    """
-    # Check dispatch config for per-role overrides (e.g. "max_turns_developer": 50)
-    effective_config = config or getattr(args, "dispatch_config", None)
-    base_turns = None
-    if effective_config:
-        role_key = role.replace("-", "_")  # security-reviewer -> security_reviewer
-        config_key = f"max_turns_{role_key}"
-        if config_key in effective_config:
-            base_turns = effective_config[config_key]
-
-    if base_turns is None:
-        # If CLI specified a non-default value, use it for all roles
-        cli_turns = getattr(args, "max_turns", DEFAULT_MAX_TURNS)
-        if cli_turns != DEFAULT_MAX_TURNS:
-            base_turns = cli_turns
-        else:
-            # Fall back to per-role defaults
-            base_turns = DEFAULT_ROLE_TURNS.get(role, DEFAULT_MAX_TURNS)
-
-    # Apply complexity multiplier
-    if task:
-        complexity = get_task_complexity(task)
-        multiplier = COMPLEXITY_MULTIPLIERS.get(complexity, 1.0)
-        adjusted = int(base_turns * multiplier)
-        # Enforce minimum of 10 turns
-        return max(10, adjusted)
-
-    return base_turns
-
-
-def get_role_model(role, args, config=None, task=None):
-    """Resolve model for a given role and task complexity.
-
-    Priority:
-      1. dispatch config per-complexity (e.g. model_epic, model_complex)
-      2. dispatch config per-role (e.g. model_developer, model_tester)
-      3. CLI --model
-      4. dispatch config global model
-      5. DEFAULT_ROLE_MODELS
-    """
-    effective_config = config or getattr(args, "dispatch_config", None)
-
-    if effective_config and task:
-        # Check complexity-based model override
-        complexity = get_task_complexity(task)
-        complexity_key = f"model_{complexity}"
-        if complexity_key in effective_config:
-            return effective_config[complexity_key]
-
-    if effective_config:
-        # Check role-based model override
-        role_key = role.replace("-", "_")
-        role_model_key = f"model_{role_key}"
-        if role_model_key in effective_config:
-            return effective_config[role_model_key]
-
-    # CLI override
-    cli_model = getattr(args, "model", DEFAULT_MODEL)
-    if cli_model != DEFAULT_MODEL:
-        return cli_model
-
-    # Config global model
-    if effective_config and "model" in effective_config:
-        return effective_config["model"]
-
-    return DEFAULT_ROLE_MODELS.get(role, DEFAULT_MODEL)
+# get_task_complexity extracted to equipa/tasks.py
+# get_role_turns, get_role_model extracted to equipa/roles.py
 
 
 # --- Checkpoint/Resume ---
@@ -2899,11 +1959,7 @@ async def dispatch_agent(cmd, role, output, max_turns, task_id, cycle,
 # --- Dev+Tester Loop (Phase 2) ---
 
 
-def _apply_cost_totals(result, total_cost, total_duration):
-    """Stamp accumulated cost and duration onto a result dict."""
-    result["cost"] = total_cost
-    result["duration"] = total_duration
-    return result
+# _apply_cost_totals extracted to equipa/roles.py
 
 async def run_dev_test_loop(task, project_dir, project_context, args, output=None):
     """Run the Developer + Tester iteration loop.
@@ -3953,29 +3009,7 @@ async def run_manager_loop(goal, project_id, project_dir, project_context, args,
 
 # --- Verification ---
 
-def verify_task_updated(task_id):
-    """Check if the agent updated the task status in TheForge."""
-    conn = get_db_connection()
-    try:
-        row = conn.execute(
-            "SELECT status FROM tasks WHERE id = ?",
-            (task_id,),
-        ).fetchone()
-
-        if not row:
-            return False, f"Task {task_id} not found in database"
-
-        status = row["status"]
-        if status == "done":
-            return True, f"Task {task_id} marked as DONE"
-        elif status == "blocked":
-            return True, f"Task {task_id} marked as BLOCKED (agent reported blocker)"
-        elif status == "in_progress":
-            return False, f"Task {task_id} still IN_PROGRESS (agent may not have finished)"
-        else:
-            return False, f"Task {task_id} status is '{status}' (expected done or blocked)"
-    finally:
-        conn.close()
+# verify_task_updated extracted to equipa/tasks.py
 
 
 # _print_task_summary, print_summary, print_dev_test_summary extracted to equipa/output.py
@@ -3983,45 +3017,7 @@ def verify_task_updated(task_id):
 # _is_git_repo extracted to equipa/git_ops.py
 
 
-def resolve_project_dir(task):
-    """Find the project directory for a task's project.
-
-    Resolution order:
-    1. dispatch_config/forge_config project_dirs (exact match)
-    2. TheForge DB local_path (source of truth)
-
-    Uses exact match only — no partial/substring matching to prevent
-    path traversal via crafted project codenames (security finding #3).
-    """
-    codename = task.get("project_codename", "").lower().strip()
-    project_name = task.get("project_name", "").lower().strip()
-
-    # 1. Check config file overrides first (exact match)
-    if codename and codename in PROJECT_DIRS:
-        return PROJECT_DIRS[codename]
-    if project_name and project_name in PROJECT_DIRS:
-        return PROJECT_DIRS[project_name]
-
-    # 2. Fall back to TheForge DB local_path (source of truth)
-    project_id = task.get("project_id")
-    if project_id and THEFORGE_DB:
-        try:
-            import sqlite3
-            conn = sqlite3.connect(THEFORGE_DB)
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT local_path FROM projects WHERE id = ? AND local_path IS NOT NULL",
-                (project_id,)
-            ).fetchone()
-            conn.close()
-            if row and row["local_path"]:
-                db_path = row["local_path"].rstrip("/").rstrip("\\")
-                if Path(db_path).exists():
-                    return db_path
-        except Exception as e:
-            print(f"WARNING: DB lookup for project dir failed: {e}")
-
-    return None
+# resolve_project_dir extracted to equipa/tasks.py
 
 
 # --- Parallel Goals (Phase 4A) ---

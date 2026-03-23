@@ -1,9 +1,11 @@
 """EQUIPA messages module — inter-agent messaging via TheForge DB.
 
-Layer 3: Depends on DB functions (get_db_connection, ensure_schema) from
-the monolith via late imports until the DB layer is extracted in Phase 3.
+Layer 3: Depends on equipa.db (get_db_connection, ensure_schema) and
+monolith functions (_make_untrusted_delimiter, wrap_untrusted) for
+content isolation.
 
 Extracted from forge_orchestrator.py as part of Phase 2 monolith split.
+Updated in Phase 3 to import from equipa.db instead of late monolith imports.
 
 Copyright 2026 Forgeborn
 """
@@ -11,6 +13,8 @@ Copyright 2026 Forgeborn
 from __future__ import annotations
 
 import json
+
+from equipa.db import ensure_schema, get_db_connection
 
 
 def post_agent_message(
@@ -23,8 +27,6 @@ def post_agent_message(
 ) -> None:
     """Insert a structured message from one agent role to another."""
     try:
-        from forge_orchestrator import ensure_schema, get_db_connection
-
         ensure_schema()
         conn = get_db_connection(write=True)
         conn.execute(
@@ -46,8 +48,6 @@ def read_agent_messages(
 ) -> list[dict]:
     """Fetch unread messages for a given role on a task."""
     try:
-        from forge_orchestrator import ensure_schema, get_db_connection
-
         ensure_schema()
         conn = get_db_connection()
         if max_cycle is not None:
@@ -81,8 +81,6 @@ def mark_messages_read(
 ) -> None:
     """Mark all unread messages for a role as consumed by a given cycle."""
     try:
-        from forge_orchestrator import ensure_schema, get_db_connection
-
         ensure_schema()
         conn = get_db_connection(write=True)
         conn.execute(
