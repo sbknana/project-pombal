@@ -113,130 +113,81 @@ def wrap_untrusted(content, delimiter):
     return f"<<<{delimiter}>>>\n{content}\n<<<END_{delimiter}>>>"
 
 
-# --- Constants ---
+# --- Constants (extracted to equipa/constants.py) ---
 
-THEFORGE_DB = Path(os.environ.get("THEFORGE_DB", Path(__file__).parent / "theforge.db"))
-MCP_CONFIG = Path(__file__).parent / "mcp_config.json"
-PROMPTS_DIR = Path(__file__).parent / "prompts"
-SKILLS_BASE_DIR = Path(__file__).parent / "skills"
+from equipa.constants import (  # noqa: E402
+    AUTOFIX_COST_LIMIT,
+    AUTOFIX_DEBUGGER_BUDGET,
+    AUTOFIX_MAX_DEBUGGER_CYCLES,
+    AUTOFIX_PLANNER_BUDGET,
+    BUDGET_CHECK_INTERVAL,
+    BUDGET_CRITICAL_THRESHOLD,
+    BUDGET_HALFWAY_THRESHOLD,
+    CHECKPOINT_DIR,
+    COMPLEXITY_MULTIPLIERS,
+    COST_ESTIMATE_PER_TURN,
+    COST_LIMITS,
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_MAX_TURNS,
+    DEFAULT_MODEL,
+    DEFAULT_ROLE_MODELS,
+    DEFAULT_ROLE_TURNS,
+    DEV_COMPACTION_THRESHOLD,
+    DYNAMIC_BUDGET_BLOCKED_RATIO,
+    DYNAMIC_BUDGET_EXTEND_TURNS,
+    DYNAMIC_BUDGET_MIN_TURNS,
+    DYNAMIC_BUDGET_START_RATIO,
+    EARLY_TERM_EXEMPT_ROLES,
+    EARLY_TERM_FINAL_WARN_TURNS,
+    EARLY_TERM_KILL_TURNS,
+    EARLY_TERM_STUCK_PHRASES,
+    EARLY_TERM_WARN_TURNS,
+    GITHUB_OWNER,
+    GITIGNORE_TEMPLATES,
+    MAX_CONTINUATIONS,
+    MAX_DEV_TEST_CYCLES,
+    MAX_FOLLOWUP_TASKS,
+    MAX_MANAGER_ROUNDS,
+    MAX_TASKS_PER_PLAN,
+    MCP_CONFIG,
+    MONOLOGUE_EXEMPT_TURNS,
+    MONOLOGUE_THRESHOLD,
+    NO_PROGRESS_LIMIT,
+    PREFLIGHT_SKIP_KEYWORDS,
+    PREFLIGHT_TIMEOUT,
+    PRIORITY_ORDER,
+    PROCESS_TIMEOUT,
+    PROJECT_DIRS,
+    PROMPTS_DIR,
+    ROLE_PROMPTS,
+    ROLE_SKILLS,
+    SKILL_MANIFEST_FILE,
+    SKILLS_BASE_DIR,
+    TESTER_COMPACTION_THRESHOLD,
+    THEFORGE_DB,
+)
 
-# Per-role skill directories (loaded via --add-dir when role has skills)
-ROLE_SKILLS = {
-    "security-reviewer": SKILLS_BASE_DIR / "security",
-    "developer": SKILLS_BASE_DIR / "developer",
-    "tester": SKILLS_BASE_DIR / "tester",
-    "code-reviewer": SKILLS_BASE_DIR / "code-reviewer",
-    "debugger": SKILLS_BASE_DIR / "debugger",
-}
+# --- Checkpoints (extracted to equipa/checkpoints.py) ---
 
-# Role prompt files (prepended with _common.md automatically)
-ROLE_PROMPTS = {
-    "developer": PROMPTS_DIR / "developer.md",
-    "security-reviewer": PROMPTS_DIR / "security-reviewer.md",
-    "tester": PROMPTS_DIR / "tester.md",
-    "planner": PROMPTS_DIR / "planner.md",
-    "evaluator": PROMPTS_DIR / "evaluator.md",
-}
+from equipa.checkpoints import (  # noqa: E402
+    clear_checkpoints,
+    load_checkpoint,
+    save_checkpoint,
+)
 
-DEFAULT_MODEL = "sonnet"
-DEFAULT_MAX_TURNS = 25
-DEFAULT_MAX_RETRIES = 3
-PROCESS_TIMEOUT = 3600  # 60 minutes
+# --- Git Operations (extracted to equipa/git_ops.py) ---
 
-# Per-role turn limits (used when dispatch config or CLI doesn't specify)
-DEFAULT_ROLE_TURNS = {
-    "developer": 40,
-    "tester": 15,
-    "security-reviewer": 30,
-    "planner": 20,
-    "evaluator": 15,
-    "frontend-designer": 35,
-    "integration-tester": 20,
-    "debugger": 30,
-    "code-reviewer": 20,
-    "qa-tester": 25,
-}
+from equipa.git_ops import (  # noqa: E402
+    _get_repo_env,
+    _git_run,
+    _is_git_repo,
+    check_gh_installed,
+    detect_project_language,
+    setup_all_repos,
+    setup_single_repo,
+)
 
-# Checkpoint/Resume: save agent output on timeout for continuation
-CHECKPOINT_DIR = Path(__file__).parent / ".forge-checkpoints"
-
-# Complexity multipliers applied to per-role turn limits
-COMPLEXITY_MULTIPLIERS = {
-    "simple": 0.5,
-    "medium": 1.0,
-    "complex": 1.5,
-    "epic": 2.0,
-}
-
-# Dynamic turn budget settings
-DYNAMIC_BUDGET_START_RATIO = 0.8   # Start agents at 80% of their max_turns budget
-DYNAMIC_BUDGET_MIN_TURNS = 15      # Minimum starting budget regardless of ratio
-DYNAMIC_BUDGET_EXTEND_TURNS = 10   # Extra turns granted when agent reports FILES_CHANGED
-DYNAMIC_BUDGET_BLOCKED_RATIO = 0.5 # Reduce remaining budget by 50% on RESULT: blocked
-
-# Default model per role (overridden by dispatch_config per-role or per-complexity keys)
-DEFAULT_ROLE_MODELS = {
-    "developer": "opus",
-    "tester": "sonnet",
-    "security-reviewer": "opus",
-    "planner": "opus",
-    "evaluator": "sonnet",
-    "frontend-designer": "opus",
-    "integration-tester": "sonnet",
-    "debugger": "opus",
-    "code-reviewer": "sonnet",
-    "qa-tester": "sonnet",
-}
-
-# Dev+Tester loop constants
-MAX_DEV_TEST_CYCLES = 5
-DEV_COMPACTION_THRESHOLD = 10    # turns before compacting developer
-TESTER_COMPACTION_THRESHOLD = 6  # turns before compacting tester
-NO_PROGRESS_LIMIT = 2            # consecutive no-change runs before blocking
-MAX_CONTINUATIONS = 3            # auto-retries when developer runs out of turns/timeout
-
-# Early termination: detect stuck agents mid-run and kill before wasting turns
-# Escalating warnings: first warning → final warning → kill
-EARLY_TERM_WARN_TURNS = 12        # turns with no Edit/Write before first warning
-EARLY_TERM_FINAL_WARN_TURNS = 18 # turns with no Edit/Write before final warning
-EARLY_TERM_KILL_TURNS = 22       # turns with no Edit/Write before killing agent
-EARLY_TERM_STUCK_PHRASES = [
-    "i am unable to",
-    "i cannot",
-    "i'm unable to",
-    "i'm not able to",
-    "i don't have access",
-    "i do not have access",
-    "this is beyond my capabilities",
-    "i cannot complete this task",
-    "i'm stuck",
-    "i am stuck",
-]
-# Roles that legitimately produce no file changes (research/planning tasks)
-EARLY_TERM_EXEMPT_ROLES = {"planner", "evaluator", "security-reviewer", "code-reviewer", "researcher"}
-
-# Monologue detection: consecutive assistant messages with zero tool calls
-MONOLOGUE_THRESHOLD = 3      # terminate after this many text-only turns in a row
-MONOLOGUE_EXEMPT_TURNS = 5   # do not trigger during first N turns (agent may be planning)
-
-# Budget visibility: inject remaining budget info into agent context
-# Based on BATS research — budget visibility reduces wasted turns by ~40%
-BUDGET_CHECK_INTERVAL = 5    # inject budget message every N turns
-BUDGET_HALFWAY_THRESHOLD = 0.5   # fraction of budget used to trigger HALFWAY warning
-BUDGET_CRITICAL_THRESHOLD = 0.75  # fraction of budget used to trigger CRITICAL warning
-
-# Cost-based circuit breaker: terminate tasks that exceed cost limits
-# Default limits per complexity tier (in USD). Configurable via dispatch_config "cost_limits".
-COST_LIMITS = {
-    "simple": 3.0,
-    "medium": 5.0,
-    "complex": 10.0,
-    "epic": 20.0,
-}
-COST_ESTIMATE_PER_TURN = 0.15  # estimated cost per turn when actual cost is None (killed runs)
-
-# Skill integrity verification: SHA-256 manifest of all prompt and skill files
-SKILL_MANIFEST_FILE = Path(__file__).parent / "skill_manifest.json"
+import equipa.constants as _equipa_constants  # noqa: E402
 
 
 def generate_skill_manifest():
@@ -345,39 +296,6 @@ def _accumulate_cost(result, label=None, output=None):
         return estimated
     return 0.0
 
-# Pre-flight build check: detect build failures before agent starts
-PREFLIGHT_TIMEOUT = 60  # max seconds to wait for build check
-PREFLIGHT_SKIP_KEYWORDS = frozenset({
-    "fix", "build", "compile", "broken", "compilation", "error",
-})
-
-# Auto-fix: dispatch debugger agent when preflight build check fails
-AUTOFIX_MAX_DEBUGGER_CYCLES = 2   # max debugger attempts before escalating to planner
-AUTOFIX_PLANNER_BUDGET = 15       # turns for planner to analyze build failure
-AUTOFIX_DEBUGGER_BUDGET = 25      # turns for debugger to fix the build
-AUTOFIX_COST_LIMIT = 8.0          # max USD to spend on auto-fix before giving up
-
-# Manager mode constants (Phase 3)
-MAX_MANAGER_ROUNDS = 3       # max plan-execute-evaluate rounds
-MAX_TASKS_PER_PLAN = 8       # planner can't create more than this
-MAX_FOLLOWUP_TASKS = 4       # evaluator can't create more than this per round
-
-# Project codenames mapped to their local directories
-# Populate via forge_config.json or dispatch_config.json project_dirs
-PROJECT_DIRS = {}
-
-# For sorting text-based priority values
-PRIORITY_ORDER = {
-    "critical": 4,
-    "high": 3,
-    "medium": 2,
-    "low": 1,
-}
-
-# Default GitHub owner for --setup-repos
-GITHUB_OWNER = ""
-
-
 # --- Provider Abstraction (Claude / Ollama) ---
 
 def get_provider(role, dispatch_config=None):
@@ -444,6 +362,7 @@ def load_config():
 
     if "theforge_db" in cfg:
         THEFORGE_DB = Path(cfg["theforge_db"])
+        _equipa_constants.THEFORGE_DB = THEFORGE_DB
     if "project_dirs" in cfg:
         # Support PROJECT_BASE_DIR env var: if a project path starts with
         # $PROJECT_BASE_DIR/, resolve it against the env var value.
@@ -455,12 +374,16 @@ def load_config():
                 v = v.replace("$PROJECT_BASE_DIR", base_dir, 1)
             resolved[k.lower()] = v
         PROJECT_DIRS = resolved
+        _equipa_constants.PROJECT_DIRS = PROJECT_DIRS
     if "github_owner" in cfg:
         GITHUB_OWNER = cfg["github_owner"]
+        _equipa_constants.GITHUB_OWNER = GITHUB_OWNER
     if "mcp_config" in cfg:
         MCP_CONFIG = Path(cfg["mcp_config"])
+        _equipa_constants.MCP_CONFIG = MCP_CONFIG
     if "prompts_dir" in cfg:
         PROMPTS_DIR = Path(cfg["prompts_dir"])
+        _equipa_constants.PROMPTS_DIR = PROMPTS_DIR
 
 
 def _discover_roles():
@@ -484,6 +407,7 @@ def _discover_roles():
 
     if discovered:
         ROLE_PROMPTS = discovered
+        _equipa_constants.ROLE_PROMPTS = ROLE_PROMPTS
 
 
 def _handle_add_project(name, project_dir):
@@ -537,34 +461,6 @@ def _handle_add_project(name, project_dir):
 # Apply config and discover roles at module load time
 load_config()
 _discover_roles()
-
-# .gitignore templates for --setup-repos
-GITIGNORE_TEMPLATES = {
-    "python": "\n".join([
-        "__pycache__/", "*.pyc", "*.pyo", "*.egg-info/", "dist/", "build/",
-        ".eggs/", "*.egg", ".venv/", "venv/", ".env", "*.db",
-        "nul", "tmpclaude-*", "~$*", "desktop.ini", ".DS_Store", "Thumbs.db",
-    ]),
-    "dotnet": "\n".join([
-        "bin/", "obj/", ".vs/", "*.user", "*.suo", "*.cache",
-        "packages/", "*.nupkg", ".env", "*.db",
-        "publish/", "**/Debug/", "**/Release/",
-        "nul", "tmpclaude-*", "~$*", "desktop.ini", ".DS_Store", "Thumbs.db",
-    ]),
-    "node": "\n".join([
-        "node_modules/", "dist/", ".env", "*.db",
-        "npm-debug.log*", "yarn-error.log*",
-        "nul", "tmpclaude-*", "~$*", "desktop.ini", ".DS_Store", "Thumbs.db",
-    ]),
-    "default": "\n".join([
-        "__pycache__/", "*.pyc", "*.pyo",
-        "bin/", "obj/", ".vs/", "*.user",
-        "node_modules/", "dist/", "build/",
-        ".env", "*.db", ".venv/", "venv/",
-        "nul", "tmpclaude-*", "~$*", "desktop.ini", ".DS_Store", "Thumbs.db",
-    ]),
-}
-
 
 # --- Output Helper ---
 
@@ -2461,66 +2357,7 @@ def get_role_model(role, args, config=None, task=None):
 
 
 # --- Checkpoint/Resume ---
-
-def save_checkpoint(task_id, attempt, output_text, role="developer"):
-    """Save agent output to a checkpoint file for resume on retry.
-
-    Returns the checkpoint file path.
-    """
-    CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
-    filename = f"task_{task_id}_{role}_attempt_{attempt}.txt"
-    filepath = CHECKPOINT_DIR / filename
-    try:
-        filepath.write_text(output_text, encoding="utf-8")
-    except OSError as e:
-        print(f"  [Checkpoint] WARNING: Failed to save checkpoint: {e}")
-        return None
-    return filepath
-
-
-def load_checkpoint(task_id, role="developer"):
-    """Load the most recent checkpoint for a task+role.
-
-    Returns (checkpoint_text, attempt_number) or (None, 0) if no checkpoint exists.
-    """
-    if not CHECKPOINT_DIR.exists():
-        return None, 0
-
-    # Find all checkpoints for this task+role, sorted by attempt number
-    pattern = f"task_{task_id}_{role}_attempt_*.txt"
-    checkpoints = sorted(CHECKPOINT_DIR.glob(pattern))
-    if not checkpoints:
-        return None, 0
-
-    latest = checkpoints[-1]
-    try:
-        text = latest.read_text(encoding="utf-8")
-    except OSError:
-        return None, 0
-
-    # Extract attempt number from filename
-    stem = latest.stem  # e.g. task_124_developer_attempt_2
-    try:
-        attempt = int(stem.rsplit("_", 1)[1])
-    except (ValueError, IndexError):
-        attempt = 0
-
-    return text, attempt
-
-
-def clear_checkpoints(task_id, role=None):
-    """Remove checkpoint files for a completed task."""
-    if not CHECKPOINT_DIR.exists():
-        return
-    if role:
-        pattern = f"task_{task_id}_{role}_attempt_*.txt"
-    else:
-        pattern = f"task_{task_id}_*_attempt_*.txt"
-    for f in CHECKPOINT_DIR.glob(pattern):
-        try:
-            f.unlink()
-        except OSError:
-            pass
+# save_checkpoint, load_checkpoint, clear_checkpoints extracted to equipa/checkpoints.py
 
 
 def build_checkpoint_context(checkpoint_text, attempt):
@@ -5397,9 +5234,7 @@ def print_dev_test_summary(task, result, cycles, outcome, verified, verify_msg):
                         cycles=cycles, outcome=outcome)
 
 
-def _is_git_repo(path):
-    """Check if a directory is a git repository."""
-    return (Path(path) / ".git").exists()
+# _is_git_repo extracted to equipa/git_ops.py
 
 
 def resolve_project_dir(task):
@@ -5723,286 +5558,11 @@ def print_dispatch_summary(results):
 
 
 # --- GitHub Repo Setup (Phase 4B) ---
-
-def check_gh_installed():
-    """Verify that gh CLI is installed and authenticated.
-
-    Returns True if ready, prints error and returns False otherwise.
-    """
-    if not shutil.which("gh"):
-        print("ERROR: GitHub CLI (gh) is not installed.")
-        print("Install it from: https://cli.github.com/")
-        return False
-
-    try:
-        result = subprocess.run(
-            ["gh", "auth", "status"],
-            capture_output=True, text=True, timeout=10,
-        )
-        if result.returncode != 0:
-            print("ERROR: GitHub CLI is not authenticated.")
-            print("Run: gh auth login")
-            return False
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        print("ERROR: Could not check gh auth status.")
-        return False
-
-    return True
+# check_gh_installed extracted to equipa/git_ops.py
 
 
-def detect_project_language(project_dir):
-    """Detect languages and frameworks in a project by scanning for marker files.
-
-    Returns a dict with:
-        - languages: list of detected language strings
-        - frameworks: list of detected framework strings
-        - primary: the most likely primary language (string)
-
-    The primary language is chosen by a priority order that favours explicit
-    project manifests over file-extension scanning.
-    """
-    p = Path(project_dir)
-    languages = []
-    frameworks = []
-
-    # --- Language detection via marker files ---
-
-    # Python: pyproject.toml, setup.py, requirements.txt, Pipfile
-    python_markers = ["pyproject.toml", "setup.py", "requirements.txt", "Pipfile"]
-    if any((p / m).exists() for m in python_markers) or list(p.glob("*.py")):
-        languages.append("python")
-        if (p / "pyproject.toml").exists():
-            try:
-                content = (p / "pyproject.toml").read_text(encoding="utf-8", errors="replace")
-                if "django" in content.lower():
-                    frameworks.append("django")
-                if "fastapi" in content.lower():
-                    frameworks.append("fastapi")
-                if "flask" in content.lower():
-                    frameworks.append("flask")
-            except OSError:
-                pass
-
-    # TypeScript: tsconfig.json
-    has_tsconfig = (p / "tsconfig.json").exists()
-    if has_tsconfig:
-        languages.append("typescript")
-
-    # JavaScript: package.json without tsconfig (pure JS)
-    has_package_json = (p / "package.json").exists()
-    if has_package_json and not has_tsconfig:
-        if (p / "jsconfig.json").exists() or not has_tsconfig:
-            languages.append("javascript")
-
-    # Detect Node/JS frameworks from package.json
-    if has_package_json:
-        try:
-            content = (p / "package.json").read_text(encoding="utf-8", errors="replace")
-            if '"next"' in content:
-                frameworks.append("nextjs")
-            if '"react"' in content:
-                frameworks.append("react")
-            if '"express"' in content:
-                frameworks.append("express")
-            if '"vue"' in content:
-                frameworks.append("vue")
-            if '"angular"' in content or '"@angular/core"' in content:
-                frameworks.append("angular")
-        except OSError:
-            pass
-
-    # Go: go.mod
-    if (p / "go.mod").exists():
-        languages.append("go")
-
-    # Rust: Cargo.toml
-    if (p / "Cargo.toml").exists():
-        languages.append("rust")
-
-    # C#/.NET: *.csproj, *.sln
-    if list(p.glob("*.csproj")) or list(p.glob("*.sln")) or list(p.glob("**/*.csproj")):
-        languages.append("csharp")
-        frameworks.append("dotnet")
-
-    # Java: pom.xml, build.gradle
-    if (p / "pom.xml").exists() or (p / "build.gradle").exists() or (p / "build.gradle.kts").exists():
-        languages.append("java")
-        if (p / "pom.xml").exists():
-            frameworks.append("maven")
-        if (p / "build.gradle").exists() or (p / "build.gradle.kts").exists():
-            frameworks.append("gradle")
-
-    # Determine primary language (first detected wins based on priority above)
-    primary = languages[0] if languages else "default"
-
-    return {
-        "languages": languages,
-        "frameworks": frameworks,
-        "primary": primary,
-    }
-
-
-def _get_repo_env():
-    """Build an environment dict with git and gh on the PATH."""
-    env = os.environ.copy()
-    extra_paths = []
-    for candidate in [
-        r"C:\Program Files\Git\cmd",
-        r"C:\Program Files\GitHub CLI",
-    ]:
-        if os.path.isdir(candidate) and candidate not in env.get("PATH", ""):
-            extra_paths.append(candidate)
-    if extra_paths:
-        env["PATH"] = ";".join(extra_paths) + ";" + env.get("PATH", "")
-    return env
-
-
-def _git_run(args_list, cwd, timeout=30):
-    """Run a git/gh command with standard options. Returns subprocess result."""
-    return subprocess.run(
-        args_list, capture_output=True, text=True,
-        cwd=str(cwd), timeout=timeout, env=_get_repo_env(),
-    )
-
-
-def setup_single_repo(codename, project_dir, owner, dry_run=False):
-    """Initialize git and create a GitHub private repo for a single project.
-
-    Returns (success: bool, message: str).
-    """
-    p = Path(project_dir)
-    repo_name = codename.lower().replace(" ", "-")
-
-    # Skip if already fully set up (has .git AND a remote)
-    has_git = (p / ".git").exists()
-    if has_git:
-        try:
-            r = _git_run(["git", "remote", "get-url", "origin"], p, timeout=10)
-            if r.returncode == 0 and r.stdout.strip():
-                return True, f"Already set up (remote: {r.stdout.strip()})"
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
-
-    if dry_run:
-        lang_info = detect_project_language(project_dir)
-        return True, f"DRY RUN: Would init git, detect={lang_info['primary']}, create {owner}/{repo_name}"
-
-    # .gitignore
-    lang_info = detect_project_language(project_dir)
-    lang = lang_info["primary"]
-    # Map new language keys to existing gitignore template keys
-    gitignore_key_map = {"typescript": "node", "javascript": "node", "csharp": "dotnet"}
-    gitignore_key = gitignore_key_map.get(lang, lang)
-    gitignore_path = p / ".gitignore"
-    if not gitignore_path.exists():
-        template = GITIGNORE_TEMPLATES.get(gitignore_key, GITIGNORE_TEMPLATES["default"])
-        gitignore_path.write_text(template + "\n", encoding="utf-8")
-        print(f"    Created .gitignore ({lang})")
-
-    # git init
-    if not has_git:
-        r = _git_run(["git", "init"], p)
-        if r.returncode != 0:
-            return False, f"git init failed: {r.stderr.strip()}"
-    else:
-        print(f"    .git already exists, resuming setup")
-
-    # git add (filter CRLF warnings)
-    r = _git_run(["git", "add", "."], p, timeout=300)
-    if r.returncode != 0:
-        real_errors = [l for l in r.stderr.strip().splitlines() if not l.startswith("warning:")]
-        if real_errors:
-            return False, f"git add failed: {chr(10).join(real_errors)}"
-
-    # git commit
-    r = _git_run(["git", "commit", "-m", "Initial commit"], p, timeout=120)
-    if r.returncode != 0:
-        if "nothing to commit" not in (r.stdout + r.stderr):
-            return False, f"git commit failed: {r.stderr.strip()}"
-        print(f"    Nothing to commit (empty or already committed)")
-
-    # gh repo create
-    r = _git_run(["gh", "repo", "create", f"{owner}/{repo_name}",
-                   "--private", "--source=.", "--push"], p, timeout=300)
-    if r.returncode != 0:
-        if "already exists" in r.stderr:
-            print(f"    Repo already exists on GitHub, adding remote...")
-            _git_run(["git", "remote", "add", "origin",
-                       f"https://github.com/{owner}/{repo_name}.git"], p, timeout=10)
-            pr = _git_run(["git", "push", "-u", "origin", "main"], p, timeout=120)
-            if pr.returncode != 0:
-                _git_run(["git", "push", "-u", "origin", "master"], p, timeout=120)
-        else:
-            return False, f"gh repo create failed: {r.stderr.strip()}"
-
-    return True, f"Created https://github.com/{owner}/{repo_name}"
-
-
-def setup_all_repos(args):
-    """Initialize git + GitHub repos for all (or one) project.
-
-    Uses --setup-repos for all, --setup-repos-project for a single project.
-    """
-    # Check prerequisites (skip for dry run)
-    if not args.dry_run and not check_gh_installed():
-        sys.exit(1)
-
-    # synced storage warning
-    print("\n" + "!" * 60)
-    print("WARNING: Git repos in synced storage can experience corruption")
-    print("from sync conflicts on the .git/index binary file.")
-    print("")
-    print("Recommendation: Avoid editing the same project on multiple")
-    print("PCs simultaneously. The GitHub remote serves as your backup —")
-    print("you can always re-clone if needed.")
-    print("!" * 60)
-
-    if not args.yes and not args.dry_run:
-        response = input("\nContinue? (y/n): ").strip().lower()
-        if response != "y":
-            print("Aborted.")
-            return
-
-    # Determine which projects to set up
-    if args.setup_repos_project:
-        # Single project by ID
-        project_info = fetch_project_info(args.setup_repos_project)
-        if not project_info:
-            print(f"ERROR: Project {args.setup_repos_project} not found in TheForge")
-            sys.exit(1)
-
-        codename = project_info.get("codename", "").lower().strip()
-        pname = project_info.get("name", "").lower().strip()
-        project_dir = PROJECT_DIRS.get(codename) or PROJECT_DIRS.get(pname)
-
-        if not project_dir:
-            print(f"ERROR: No directory mapped for project '{project_info.get('name')}'")
-            sys.exit(1)
-
-        targets = [(codename or pname, project_dir)]
-    else:
-        # All projects
-        targets = list(PROJECT_DIRS.items())
-
-    print(f"\nSetting up {len(targets)} project(s)...\n")
-
-    results = []
-    for codename, project_dir in targets:
-        if not Path(project_dir).exists():
-            print(f"  [{codename}] SKIP — directory does not exist: {project_dir}")
-            results.append((codename, False, "Directory does not exist"))
-            continue
-
-        print(f"  [{codename}] {project_dir}")
-        success, msg = setup_single_repo(codename, project_dir, GITHUB_OWNER, args.dry_run)
-        status = "OK" if success else "FAIL"
-        print(f"    -> {status}: {msg}")
-        results.append((codename, success, msg))
-
-    # Summary
-    ok = sum(1 for _, s, _ in results if s)
-    fail = len(results) - ok
-    print(f"\nDone: {ok} succeeded, {fail} failed out of {len(results)} projects.")
+# detect_project_language, _get_repo_env, _git_run, setup_single_repo,
+# setup_all_repos extracted to equipa/git_ops.py
 
 
 # --- Auto-Run: DB Scanning & Scoring (Phase 5) ---
