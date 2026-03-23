@@ -8,7 +8,15 @@ Copyright 2026 Forgeborn
 
 from __future__ import annotations
 
-from equipa.constants import MAX_DEV_TEST_CYCLES, NO_PROGRESS_LIMIT
+from pathlib import Path
+
+from equipa.constants import (
+    DEFAULT_MAX_TURNS,
+    DEFAULT_MODEL,
+    MAX_DEV_TEST_CYCLES,
+    NO_PROGRESS_LIMIT,
+    PROJECT_DIRS,
+)
 
 
 def log(msg: str, output: list[str] | None = None) -> None:
@@ -231,3 +239,53 @@ def print_parallel_summary(results: list) -> None:
 def print_dispatch_summary(results: list) -> None:
     """Final report: tasks completed/blocked per project."""
     _print_batch_summary("AUTO-RUN DISPATCH SUMMARY", results, mode="dispatch")
+
+
+def print_dispatch_plan(scored: list, config: dict) -> None:
+    """Preview: which projects will run, scores, task counts."""
+    from equipa.monitoring import calculate_dynamic_budget
+
+    max_tasks = config.get("max_tasks_per_project", 5)
+    max_concurrent = config.get("max_concurrent", 4)
+
+    print(f"\n{'#' * 60}")
+    print("AUTO-RUN DISPATCH PLAN")
+    print(f"{'#' * 60}")
+    print(f"\n  Max concurrent: {max_concurrent}")
+    print(f"  Max tasks/project: {max_tasks}")
+    print(f"  Model: {config.get('model', DEFAULT_MODEL)}")
+    max_turns_val = config.get("max_turns", DEFAULT_MAX_TURNS)
+    start_budget, _ = calculate_dynamic_budget(max_turns_val)
+    print(f"  Max turns: {max_turns_val} (dynamic start: {start_budget})")
+    print()
+
+    total_tasks = 0
+    for i, proj in enumerate(scored, 1):
+        counts = proj["counts"]
+        capped = min(proj["total_todo"], max_tasks)
+        total_tasks += capped
+
+        codename_lower = proj.get("codename", "").lower().strip()
+        has_dir = (
+            codename_lower in PROJECT_DIRS
+            and Path(PROJECT_DIRS.get(codename_lower, "")).exists()
+        )
+
+        print(
+            f"  [{i}] {proj['project_name']} (ID: {proj['project_id']}, "
+            f"codename: {proj.get('codename', '?')})"
+        )
+        print(
+            f"      Score: {proj.get('score', '?')} | "
+            f"Status: {proj.get('status', '?')}"
+        )
+        print(
+            f"      Tasks: {capped}/{proj['total_todo']} "
+            f"(C:{counts['critical']} H:{counts['high']} "
+            f"M:{counts['medium']} L:{counts['low']})"
+        )
+        print(f"      Dir: {'OK' if has_dir else 'MISSING'}")
+        print()
+
+    print(f"  TOTAL: {len(scored)} projects, {total_tasks} tasks to attempt")
+    print(f"\n{'#' * 60}")

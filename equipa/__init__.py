@@ -1,6 +1,7 @@
 """EQUIPA package — modular extraction of forge_orchestrator.py.
 
 Phase 1 leaf modules: constants, checkpoints, git_ops.
+Phase 2 low-coupling modules: output, messages, parsing, monitoring.
 All public symbols are re-exported here for backward compatibility.
 
 Copyright 2026 Forgeborn
@@ -79,6 +80,77 @@ from equipa.git_ops import (
     setup_single_repo,
 )
 
+# --- Output (equipa.output) ---
+from equipa.output import (
+    _print_batch_summary,
+    _print_task_summary,
+    log,
+    print_dev_test_summary,
+    print_dispatch_plan,
+    print_dispatch_summary,
+    print_manager_summary,
+    print_parallel_summary,
+    print_summary,
+)
+
+# --- Messages (equipa.messages) ---
+from equipa.messages import (
+    format_messages_for_prompt,
+    mark_messages_read,
+    post_agent_message,
+    read_agent_messages,
+)
+
+# --- Parsing (equipa.parsing) ---
+from equipa.parsing import (
+    CHARS_PER_TOKEN,
+    EPISODE_REDUCTION_THRESHOLD,
+    SYSTEM_PROMPT_TOKEN_HARD_LIMIT,
+    SYSTEM_PROMPT_TOKEN_TARGET,
+    _DEVELOPER_FILES_SCHEMA,
+    _FAILURE_KEYWORD_PATTERNS,
+    _FAILURE_PRIORITY,
+    _TESTER_SCHEMA,
+    _extract_marker_value,
+    _extract_section,
+    _parse_structured_output,
+    _trim_prompt_section,
+    build_compaction_summary,
+    build_test_failure_context,
+    classify_agent_failure,
+    compact_agent_output,
+    compute_initial_q_value,
+    compute_keyword_overlap,
+    deduplicate_lessons,
+    estimate_tokens,
+    parse_approach_summary,
+    parse_developer_output,
+    parse_error_patterns,
+    parse_reflection,
+    parse_tester_output,
+    validate_output,
+)
+
+# --- Monitoring (equipa.monitoring) ---
+from equipa.monitoring import (
+    LOOP_TERMINATE_THRESHOLD,
+    LOOP_WARNING_THRESHOLD,
+    LoopDetector,
+    _build_streaming_result,
+    _build_tool_signature,
+    _check_cost_limit,
+    _check_git_changes,
+    _check_monologue,
+    _check_stuck_phrases,
+    _compute_output_hash,
+    _detect_tool_loop,
+    _get_budget_message,
+    _parse_early_complete,
+    _TOOL_SIG_KEY,
+    adjust_dynamic_budget,
+    calculate_dynamic_budget,
+)
+
 __all__ = [
     # Constants
     "AUTOFIX_COST_LIMIT",
@@ -142,4 +214,63 @@ __all__ = [
     "detect_project_language",
     "setup_all_repos",
     "setup_single_repo",
+    # Output
+    "log",
+    "print_manager_summary",
+    "_print_task_summary",
+    "print_summary",
+    "print_dev_test_summary",
+    "_print_batch_summary",
+    "print_parallel_summary",
+    "print_dispatch_plan",
+    "print_dispatch_summary",
+    # Messages
+    "post_agent_message",
+    "read_agent_messages",
+    "mark_messages_read",
+    "format_messages_for_prompt",
+    # Parsing
+    "CHARS_PER_TOKEN",
+    "SYSTEM_PROMPT_TOKEN_TARGET",
+    "SYSTEM_PROMPT_TOKEN_HARD_LIMIT",
+    "EPISODE_REDUCTION_THRESHOLD",
+    "estimate_tokens",
+    "compute_keyword_overlap",
+    "deduplicate_lessons",
+    "_extract_section",
+    "compact_agent_output",
+    "_trim_prompt_section",
+    "_extract_marker_value",
+    "parse_reflection",
+    "parse_approach_summary",
+    "_FAILURE_KEYWORD_PATTERNS",
+    "_FAILURE_PRIORITY",
+    "classify_agent_failure",
+    "parse_error_patterns",
+    "compute_initial_q_value",
+    "_parse_structured_output",
+    "_TESTER_SCHEMA",
+    "_DEVELOPER_FILES_SCHEMA",
+    "parse_tester_output",
+    "parse_developer_output",
+    "build_compaction_summary",
+    "build_test_failure_context",
+    "validate_output",
+    # Monitoring
+    "LOOP_WARNING_THRESHOLD",
+    "LOOP_TERMINATE_THRESHOLD",
+    "_check_stuck_phrases",
+    "_check_monologue",
+    "_get_budget_message",
+    "_check_cost_limit",
+    "_check_git_changes",
+    "_parse_early_complete",
+    "_compute_output_hash",
+    "_TOOL_SIG_KEY",
+    "_build_tool_signature",
+    "_detect_tool_loop",
+    "_build_streaming_result",
+    "LoopDetector",
+    "calculate_dynamic_budget",
+    "adjust_dynamic_budget",
 ]

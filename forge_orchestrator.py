@@ -52,6 +52,71 @@ from pathlib import Path
 # Force unbuffered output so logs are visible in real-time via nohup/SSH
 os.environ["PYTHONUNBUFFERED"] = "1"
 
+# Phase 2 modular imports — output, messages, parsing, monitoring
+from equipa.output import (  # noqa: E402
+    _print_batch_summary,
+    _print_task_summary,
+    log,
+    print_dev_test_summary,
+    print_dispatch_plan,
+    print_dispatch_summary,
+    print_manager_summary,
+    print_parallel_summary,
+    print_summary,
+)
+from equipa.messages import (  # noqa: E402
+    format_messages_for_prompt,
+    mark_messages_read,
+    post_agent_message,
+    read_agent_messages,
+)
+from equipa.parsing import (  # noqa: E402
+    CHARS_PER_TOKEN,
+    EPISODE_REDUCTION_THRESHOLD,
+    SYSTEM_PROMPT_TOKEN_HARD_LIMIT,
+    SYSTEM_PROMPT_TOKEN_TARGET,
+    _DEVELOPER_FILES_SCHEMA,
+    _FAILURE_KEYWORD_PATTERNS,
+    _FAILURE_PRIORITY,
+    _TESTER_SCHEMA,
+    _extract_marker_value,
+    _extract_section,
+    _parse_structured_output,
+    _trim_prompt_section,
+    build_compaction_summary,
+    build_test_failure_context,
+    classify_agent_failure,
+    compact_agent_output,
+    compute_initial_q_value,
+    compute_keyword_overlap,
+    deduplicate_lessons,
+    estimate_tokens,
+    parse_approach_summary,
+    parse_developer_output,
+    parse_error_patterns,
+    parse_reflection,
+    parse_tester_output,
+    validate_output,
+)
+from equipa.monitoring import (  # noqa: E402
+    LOOP_TERMINATE_THRESHOLD,
+    LOOP_WARNING_THRESHOLD,
+    LoopDetector,
+    _build_streaming_result,
+    _build_tool_signature,
+    _check_cost_limit,
+    _check_git_changes,
+    _check_monologue,
+    _check_stuck_phrases,
+    _compute_output_hash,
+    _detect_tool_loop,
+    _get_budget_message,
+    _parse_early_complete,
+    _TOOL_SIG_KEY,
+    adjust_dynamic_budget,
+    calculate_dynamic_budget,
+)
+
 # Import ForgeSmith functions for lesson injection
 try:
     from forgesmith import get_relevant_lessons
@@ -464,17 +529,7 @@ _discover_roles()
 
 # --- Output Helper ---
 
-def log(msg, output=None):
-    """Print a message or buffer it for later display.
-
-    In single-goal mode, output is None and messages print immediately.
-    In parallel mode, output is a list and messages are collected for
-    display after the goal completes.
-    """
-    if output is not None:
-        output.append(msg)
-    else:
-        print(msg)
+# log() extracted to equipa/output.py
 
 
 # --- Database Functions ---
@@ -803,100 +858,8 @@ def ensure_schema():
 
 # --- Inter-Agent Message Channel ---
 
-def post_agent_message(task_id, cycle, from_role, to_role, msg_type, content):
-    """Insert a structured message from one agent role to another."""
-    try:
-        ensure_schema()
-        conn = get_db_connection(write=True)
-        conn.execute(
-            """INSERT INTO agent_messages
-               (task_id, cycle_number, from_role, to_role, message_type, content)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (task_id, cycle, from_role, to_role, msg_type, content),
-        )
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"  [Messages] WARNING: Failed to post agent message: {e}")
-
-
-def read_agent_messages(task_id, to_role, max_cycle=None):
-    """Fetch unread messages for a given role on a task."""
-    try:
-        ensure_schema()
-        conn = get_db_connection()
-        if max_cycle is not None:
-            rows = conn.execute(
-                """SELECT id, task_id, cycle_number, from_role, to_role,
-                          message_type, content, created_at
-                   FROM agent_messages
-                   WHERE task_id = ? AND to_role = ? AND read_by_cycle IS NULL
-                         AND cycle_number <= ?
-                   ORDER BY cycle_number ASC, id ASC""",
-                (task_id, to_role, max_cycle),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """SELECT id, task_id, cycle_number, from_role, to_role,
-                          message_type, content, created_at
-                   FROM agent_messages
-                   WHERE task_id = ? AND to_role = ? AND read_by_cycle IS NULL
-                   ORDER BY cycle_number ASC, id ASC""",
-                (task_id, to_role),
-            ).fetchall()
-        conn.close()
-        return [dict(row) for row in rows]
-    except Exception as e:
-        print(f"  [Messages] WARNING: Failed to read agent messages: {e}")
-        return []
-
-
-def mark_messages_read(task_id, to_role, cycle_number):
-    """Mark all unread messages for a role as consumed by a given cycle."""
-    try:
-        ensure_schema()
-        conn = get_db_connection(write=True)
-        conn.execute(
-            """UPDATE agent_messages
-               SET read_by_cycle = ?
-               WHERE task_id = ? AND to_role = ? AND read_by_cycle IS NULL""",
-            (cycle_number, task_id, to_role),
-        )
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"  [Messages] WARNING: Failed to mark messages as read: {e}")
-
-
-def format_messages_for_prompt(messages):
-    """Format agent messages into a prompt-friendly string."""
-    if not messages:
-        return ""
-    _delim = _make_untrusted_delimiter()
-    lines = ["## Messages from Other Agents\n"]
-    for msg in messages:
-        from_role = msg.get("from_role", "unknown")
-        msg_type = msg.get("message_type", "unknown")
-        content = msg.get("content", "")
-        cycle = msg.get("cycle_number", "?")
-        try:
-            parsed = json.loads(content)
-            if isinstance(parsed, dict):
-                content_str = ", ".join(f"{k}: {v}" for k, v in parsed.items())
-            else:
-                content_str = str(parsed)
-        except (json.JSONDecodeError, TypeError):
-            content_str = content
-        # Wrap inter-agent message content in untrusted markers — these come
-        # from agent_messages table and could contain prompt injection from a
-        # compromised agent (addresses EQ-24 variant for inter-agent channel).
-        wrapped = wrap_untrusted(content_str, _delim)
-        lines.append(
-            f'<task-input type="agent-message" trust="derived">\n'
-            f"**[{from_role}]** (cycle {cycle}, {msg_type}): {wrapped}\n"
-            f"</task-input>"
-        )
-    return "\n".join(lines)
+# post_agent_message, read_agent_messages, mark_messages_read,
+# format_messages_for_prompt extracted to equipa/messages.py
 
 
 # --- Agent Action Logging ---
@@ -985,216 +948,14 @@ def bulk_log_agent_actions(action_log, task_id, run_id, cycle, role):
         print(f"  [ActionLog] WARNING: Failed to bulk insert actions: {e}")
 
 
-def _extract_marker_value(text, marker, multiline=False):
-    """Extract value after a MARKER: line from structured agent output.
-
-    For single-line markers, returns the value after the colon.
-    For multiline, collects continuation lines until the next known marker.
-    Returns None if not found or value is 'none'.
-    """
-    if not text:
-        return None
-    section_markers = ("RESULT:", "SUMMARY:", "FILES_CHANGED:", "DECISIONS:",
-                       "BLOCKERS:", "REFLECTION:", "```")
-    lines = text.splitlines()
-    collected = []
-    in_section = False
-
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith(marker):
-            value = stripped.split(":", 1)[1].strip()
-            if not multiline:
-                return value if value and value.lower() != "none" else None
-            in_section = True
-            if value and value.lower() != "none":
-                collected.append(value)
-            continue
-        if in_section:
-            if any(stripped.startswith(m) for m in section_markers if m != marker):
-                break
-            if stripped:
-                collected.append(stripped)
-
-    result = " ".join(collected).strip()
-    return result if result else None
+# _extract_marker_value, parse_reflection, parse_approach_summary,
+# _FAILURE_KEYWORD_PATTERNS, _FAILURE_PRIORITY extracted to equipa/parsing.py
 
 
-def parse_reflection(result_text):
-    """Extract REFLECTION text from agent structured output."""
-    return _extract_marker_value(result_text, "REFLECTION:", multiline=True)
+# classify_agent_failure extracted to equipa/parsing.py
 
 
-def parse_approach_summary(result_text):
-    """Extract SUMMARY text from agent output for the episode record."""
-    return _extract_marker_value(result_text, "SUMMARY:")
-
-
-# Keyword patterns for failure classification — data-driven instead of if/elif chains
-_FAILURE_KEYWORD_PATTERNS = {
-    "build_failure": ["syntaxerror", "compileerror", "build failed", "build error",
-                      "cannot find module", "type error", "typeerror"],
-    "import_error": ["modulenotfounderror", "importerror", "no module named",
-                     "module not found", "cannot resolve", "dependency",
-                     "missing package", "version conflict"],
-    "test_failure": ["assertionerror", "test failed", "tests failed",
-                     "assertion failed", "expected", "pytest"],
-    "environment_error": ["permission denied", "connection refused", "eacces",
-                          "econnrefused", "no such file or directory"],
-}
-
-# Priority order for selecting primary failure class
-_FAILURE_PRIORITY = [
-    "analysis_paralysis", "timeout", "build_failure", "import_error",
-    "test_failure", "environment_error", "wrong_approach", "max_turns",
-]
-
-
-def classify_agent_failure(outcome, result, result_text=""):
-    """Classify an agent failure into structured categories.
-
-    Returns a dict with failure_class, secondary_classes, confidence,
-    signals, and raw_errors — or None if no failure detected.
-    """
-    if not isinstance(result, dict):
-        result = {}
-
-    errors = result.get("errors", [])
-    unique_errors = list(dict.fromkeys(errors))[:5]
-    truncated_errors = [e[:200] for e in unique_errors]
-    num_turns = result.get("num_turns", 0)
-    early_terminated = result.get("early_terminated", False)
-    early_term_reason = result.get("early_term_reason", "")
-
-    lower_errors = " ".join(e.lower() for e in unique_errors)
-    lower_result = result_text.lower() if result_text else ""
-    lower_reason = early_term_reason.lower()
-    signals, classes_detected = [], []
-
-    # --- Special cases (need contextual logic, not just keyword matching) ---
-    # Analysis paralysis
-    if "consecutive turns without file changes" in lower_reason:
-        classes_detected.append("analysis_paralysis")
-        signals.append(f"early_term: {early_term_reason[:120]}")
-    elif "consecutive" in lower_errors and "without file changes" in lower_errors:
-        classes_detected.append("analysis_paralysis")
-        signals.append("error mentions consecutive turns without file changes")
-    elif (num_turns >= EARLY_TERM_KILL_TURNS
-          and "files_changed: none" in lower_result):
-        classes_detected.append("analysis_paralysis")
-        signals.append(f"high turn count ({num_turns}) with no files changed")
-
-    # Timeout
-    if "timed out" in lower_reason or "timed out" in lower_errors:
-        classes_detected.append("timeout")
-        signals.append("process timed out")
-    elif outcome == "tester_timeout":
-        classes_detected.append("timeout")
-        signals.append("tester timeout outcome")
-
-    # Max turns
-    if any(k in lower_errors for k in ("max_turns", "max turns", "error_max_turns")) \
-            or outcome == "developer_max_turns":
-        classes_detected.append("max_turns")
-        signals.append("agent hit max turns limit")
-
-    # --- Keyword-driven classification (build, import, test, env) ---
-    for failure_class, keywords in _FAILURE_KEYWORD_PATTERNS.items():
-        # Test failure has special outcome-based detection
-        if failure_class == "test_failure" and outcome in ("cycles_exhausted", "tester_failed"):
-            classes_detected.append("test_failure")
-            signals.append(f"outcome indicates test failure: {outcome}")
-            continue
-        sources = [lower_errors] if failure_class == "environment_error" else [lower_errors, lower_result]
-        for kw in keywords:
-            if any(kw in s for s in sources):
-                if failure_class not in classes_detected:
-                    classes_detected.append(failure_class)
-                    signals.append(f"{failure_class} signal: {kw}")
-                break
-
-    # Wrong approach / loop detection
-    if "loop detected" in lower_reason or "repeated the same operation" in lower_reason:
-        classes_detected.append("wrong_approach")
-        signals.append(f"loop detection: {early_term_reason[:120]}")
-    elif "stuck" in lower_reason and "repeated" in lower_reason:
-        classes_detected.append("wrong_approach")
-        signals.append(f"stuck agent: {early_term_reason[:120]}")
-    elif outcome == "no_progress":
-        classes_detected.append("wrong_approach")
-        signals.append("no progress across multiple cycles")
-    elif ("result: blocked" in lower_result and "result: failed" in lower_result
-          and "wrong_approach" not in classes_detected):
-        classes_detected.append("wrong_approach")
-        signals.append("agent reported both blocked and failed")
-
-    # --- Determine primary class and confidence ---
-    if not classes_detected:
-        if unique_errors:
-            return {"failure_class": "unknown", "secondary_classes": [],
-                    "confidence": "low", "signals": ["unclassified error(s) present"],
-                    "raw_errors": truncated_errors}
-        return None
-
-    primary = next((c for c in _FAILURE_PRIORITY if c in classes_detected), "unknown")
-    secondary = [c for c in classes_detected if c != primary]
-    confidence = ("high" if len(signals) >= 2
-                  or early_terminated
-                  or outcome in ("cycles_exhausted", "no_progress")
-                  else "medium")
-
-    return {"failure_class": primary, "secondary_classes": secondary,
-            "confidence": confidence, "signals": signals[:5],
-            "raw_errors": truncated_errors}
-
-
-def parse_error_patterns(result, outcome=None, result_text=None):
-    """Extract and classify error patterns from agent result for episode record.
-
-    Produces structured JSON with failure classification when the agent failed.
-    Falls back to raw error string for backward compatibility if classification
-    yields nothing.
-
-    Args:
-        result: Agent result dict with 'errors', 'early_terminated', etc.
-        outcome: Task outcome string (e.g., 'early_terminated', 'no_progress').
-        result_text: Full agent output text for deeper signal extraction.
-
-    Returns:
-        JSON string with failure classification, or None if no errors.
-    """
-    if not isinstance(result, dict):
-        return None
-
-    errors = result.get("errors", [])
-    rt = result_text or result.get("result_text", "")
-
-    # Attempt structured classification
-    classification = classify_agent_failure(outcome, result, rt)
-    if classification:
-        return json.dumps(classification)
-
-    # Fallback: raw error join (backward compat for edge cases)
-    if errors:
-        unique = list(dict.fromkeys(errors))
-        return "; ".join(e[:200] for e in unique[:5])
-
-    return None
-
-
-def compute_initial_q_value(outcome):
-    """Set initial Q-value based on task outcome.
-
-    Success starts higher (0.7), failure starts lower (0.3),
-    partial/blocked at neutral (0.5).
-    """
-    if outcome in ("tests_passed", "no_tests"):
-        return 0.7
-    elif outcome in ("developer_failed", "cycles_exhausted"):
-        return 0.3
-    else:
-        # blocked, timeout, no_progress, etc.
-        return 0.4
+# parse_error_patterns, compute_initial_q_value extracted to equipa/parsing.py
 
 
 def record_agent_episode(task, result, outcome, role="developer", output=None):
@@ -1586,162 +1347,10 @@ def build_task_prompt(task, project_context, project_dir, delimiter=None):
 
 
 # --- Context Engineering Helpers ---
-
-# Token budget constants (Anthropic recommendation: ~4 chars/token for Claude)
-CHARS_PER_TOKEN = 4
-SYSTEM_PROMPT_TOKEN_TARGET = 8000  # 8K token target
-SYSTEM_PROMPT_TOKEN_HARD_LIMIT = 10000  # absolute max before aggressive trimming
-EPISODE_REDUCTION_THRESHOLD = 6000  # reduce episodes from 3->2 above this
-
-
-def estimate_tokens(text):
-    """Estimate token count using ~4 chars/token approximation for Claude."""
-    if not text:
-        return 0
-    return len(text) // CHARS_PER_TOKEN
-
-
-def compute_keyword_overlap(text_a, text_b):
-    """Compute simple keyword overlap score between two texts.
-
-    Returns a float between 0.0 and 1.0 representing the fraction of
-    words in common (Jaccard similarity on word sets).
-    """
-    if not text_a or not text_b:
-        return 0.0
-    # Normalize: lowercase, split on whitespace/punctuation
-    import re
-    words_a = set(re.findall(r'\w+', text_a.lower()))
-    words_b = set(re.findall(r'\w+', text_b.lower()))
-    if not words_a or not words_b:
-        return 0.0
-    intersection = words_a & words_b
-    union = words_a | words_b
-    return len(intersection) / len(union)
-
-
-def deduplicate_lessons(lessons):
-    """Remove semantically duplicate lessons based on 60%+ word overlap.
-
-    Keeps the first (highest times_seen) lesson when duplicates are found.
-    Returns deduplicated list, max 5 lessons.
-    """
-    if not lessons:
-        return []
-
-    unique = []
-    for lesson in lessons:
-        lesson_text = lesson.get("lesson", "")
-        is_dup = False
-        for existing in unique:
-            overlap = compute_keyword_overlap(lesson_text, existing.get("lesson", ""))
-            if overlap >= 0.6:
-                is_dup = True
-                break
-        if not is_dup:
-            unique.append(lesson)
-        if len(unique) >= 5:
-            break
-
-    return unique
-
-
-def _extract_section(text, marker, max_lines=1):
-    """Extract a named section from structured agent output.
-
-    Finds the last occurrence of 'MARKER:' and returns content.
-    For max_lines=1, returns just the header line value.
-    For max_lines>1, returns header + continuation lines.
-    For max_lines=-1 (bullet mode), returns header + bullet lines.
-    """
-    start = text.rfind(marker + ":")
-    if start == -1:
-        return ""
-    lines = text[start:].split("\n")
-    if max_lines == -1:
-        # Bullet mode: header + up to 5 bullet lines
-        kept = [lines[0]]
-        for line in lines[1:6]:
-            s = line.strip()
-            if s.startswith("-") or s == "":
-                kept.append(line)
-            else:
-                break
-        return "\n".join(kept).strip()
-    if max_lines == 1:
-        return lines[0].strip()
-    return "\n".join(lines[:max_lines]).strip()
-
-
-def compact_agent_output(raw_output, max_words=200):
-    """Compact raw agent output into a concise summary preserving actionable details."""
-    if not raw_output:
-        return ""
-
-    sections = {
-        "SUMMARY": _extract_section(raw_output, "SUMMARY"),
-        "FILES_CHANGED": _extract_section(raw_output, "FILES_CHANGED", max_lines=-1),
-        "BLOCKERS": _extract_section(raw_output, "BLOCKERS"),
-        "DECISIONS": _extract_section(raw_output, "DECISIONS"),
-        "REFLECTION": _extract_section(raw_output, "REFLECTION", max_lines=3),
-    }
-
-    # Sanitize all extracted sections to prevent cross-agent prompt injection (PS-02)
-    for key in sections:
-        if sections[key]:
-            sections[key] = sanitize_lesson_content(sections[key])
-
-    parts = []
-    if sections["SUMMARY"]:
-        parts.append(sections["SUMMARY"])
-    if sections["FILES_CHANGED"]:
-        parts.append(sections["FILES_CHANGED"])
-    for key in ("BLOCKERS", "DECISIONS"):
-        if sections[key] and "none" not in sections[key].lower():
-            parts.append(sections[key])
-    if sections["REFLECTION"]:
-        parts.append(sections["REFLECTION"])
-
-    compact = "\n".join(parts)
-
-    if not compact.strip():
-        words = raw_output.split()
-        compact = ("..." + " ".join(words[-max_words:])) if len(words) > max_words else raw_output
-
-    words = compact.split()
-    if len(words) > max_words:
-        compact = " ".join(words[:max_words]) + "..."
-
-    return compact
-
-
-def _trim_prompt_section(prompt, section_heading, max_chars=None):
-    """Remove or truncate a section from the prompt by its ## heading.
-
-    If max_chars is None, removes the entire section.
-    If max_chars is given, truncates the section content to that limit.
-    Returns the modified prompt.
-    """
-    start = prompt.find(section_heading)
-    if start == -1:
-        return prompt
-
-    # Find the next section boundary (## or ---)
-    next_section = len(prompt)
-    for marker in ["\n## ", "\n---"]:
-        pos = prompt.find(marker, start + len(section_heading))
-        if pos != -1 and pos < next_section:
-            next_section = pos
-
-    if max_chars is None:
-        # Remove entire section
-        return prompt[:start] + prompt[next_section:]
-    else:
-        # Truncate section content
-        section = prompt[start:next_section]
-        if len(section) > max_chars:
-            section = section[:max_chars] + "\n[...trimmed...]\n"
-        return prompt[:start] + section + prompt[next_section:]
+# CHARS_PER_TOKEN, SYSTEM_PROMPT_TOKEN_TARGET, SYSTEM_PROMPT_TOKEN_HARD_LIMIT,
+# EPISODE_REDUCTION_THRESHOLD, estimate_tokens, compute_keyword_overlap,
+# deduplicate_lessons, _extract_section, compact_agent_output,
+# _trim_prompt_section extracted to equipa/parsing.py
 
 
 def format_lessons_for_injection(lessons, delimiter=None):
@@ -2524,430 +2133,13 @@ async def run_agent(cmd, timeout=None):
 
 # --- Early Termination (Stuck Agent Detection) ---
 
-def _check_stuck_phrases(text):
-    """Check if text contains any stuck signal phrases.
+# _check_stuck_phrases, _check_monologue extracted to equipa/monitoring.py
 
-    Returns the matched phrase or None.
-    """
-    text_lower = text.lower()
-    for phrase in EARLY_TERM_STUCK_PHRASES:
-        if phrase in text_lower:
-            return phrase
-    return None
 
-
-def _check_monologue(consecutive_text_only_turns, turn_count):
-    """Check if the agent is monologuing (consecutive text-only messages without tool use).
-
-    Returns:
-        "terminate" if consecutive_text_only_turns >= MONOLOGUE_THRESHOLD and past exempt period.
-        "warn" if consecutive_text_only_turns == MONOLOGUE_THRESHOLD - 1 and past exempt period.
-        None otherwise.
-    """
-    # Do not trigger during the initial planning period
-    if turn_count <= MONOLOGUE_EXEMPT_TURNS:
-        return None
-
-    if consecutive_text_only_turns >= MONOLOGUE_THRESHOLD:
-        return "terminate"
-    elif consecutive_text_only_turns == MONOLOGUE_THRESHOLD - 1:
-        return "warn"
-
-    return None
-
-
-def _get_budget_message(turn_count, max_turns):
-    """Generate a budget visibility message based on current turn count.
-
-    Returns an escalating budget message at periodic intervals:
-    - Every BUDGET_CHECK_INTERVAL turns: simple status update
-    - At BUDGET_HALFWAY_THRESHOLD (50%): HALFWAY warning
-    - At BUDGET_CRITICAL_THRESHOLD (75%): CRITICAL warning
-
-    The most severe applicable message wins — if a turn triggers both
-    a periodic check and a threshold crossing, the threshold message
-    is returned (it carries the stronger signal).
-
-    Args:
-        turn_count: Current turn number (0-indexed tool calls).
-        max_turns: Maximum turns allocated for this agent run.
-
-    Returns:
-        str: Budget message to inject, or None if no message needed.
-    """
-    if not max_turns or max_turns <= 0 or turn_count <= 0:
-        return None
-
-    # Only check on interval turns
-    if turn_count % BUDGET_CHECK_INTERVAL != 0:
-        return None
-
-    remaining = max_turns - turn_count
-    fraction_used = turn_count / max_turns
-
-    if fraction_used >= BUDGET_CRITICAL_THRESHOLD:
-        return (
-            f"CRITICAL: Only {remaining} turns left out of {max_turns}. "
-            f"Write files NOW. Commit partial progress if needed."
-        )
-    elif fraction_used >= BUDGET_HALFWAY_THRESHOLD:
-        return (
-            f"HALFWAY: {turn_count}/{max_turns} turns used. "
-            f"{remaining} turns left. Prioritize writing code."
-        )
-    else:
-        return (
-            f"Budget: {turn_count}/{max_turns} turns used. "
-            f"{remaining} turns left."
-        )
-
-
-def _check_cost_limit(total_cost, complexity, config_limits=None):
-    """Check if total accumulated cost exceeds the limit for the given complexity tier.
-
-    Cost limits scale per task complexity:
-    - simple: $3.00 (default)
-    - medium: $5.00 (default)
-    - complex: $10.00 (default)
-    - epic: $20.00 (default)
-
-    Limits can be overridden via dispatch_config "cost_limits" dict.
-
-    Args:
-        total_cost: Total cost accumulated so far (in USD). None treated as $0.00.
-        complexity: Task complexity tier ('simple', 'medium', 'complex', 'epic').
-        config_limits: Optional dict overriding COST_LIMITS values from dispatch_config.
-
-    Returns:
-        str: Termination reason if cost exceeded, or None if within budget.
-    """
-    if total_cost is None or total_cost <= 0:
-        return None
-
-    # Resolve the limit: config override > default constants
-    limits = config_limits if config_limits else COST_LIMITS
-    # Default to $10.00 for unknown complexity tiers
-    limit = limits.get(complexity, 10.0)
-
-    if total_cost > limit:
-        return f"Cost limit exceeded: ${total_cost:.2f} > ${limit:.2f}"
-
-    return None
-
-
-def _check_git_changes(project_dir):
-    """Check if the project's git working tree has any changes (modified, staged, or untracked).
-
-    Runs `git diff --stat` and `git status --short` in the project directory.
-    Returns True if either command produces output (indicating file changes).
-
-    Args:
-        project_dir: Path to the project directory (must be a git repo).
-
-    Returns:
-        bool: True if file changes detected, False otherwise (including errors).
-    """
-    if not project_dir:
-        return False
-
-    project_dir_str = str(project_dir)
-    if not os.path.isdir(project_dir_str):
-        return False
-
-    try:
-        # Check for unstaged changes
-        diff_result = subprocess.run(
-            ["git", "diff", "--stat"],
-            cwd=project_dir_str,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if diff_result.returncode == 0 and diff_result.stdout.strip():
-            return True
-
-        # Check for staged/untracked files
-        status_result = subprocess.run(
-            ["git", "status", "--short"],
-            cwd=project_dir_str,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if status_result.returncode == 0 and status_result.stdout.strip():
-            return True
-
-    except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
-        # If git isn't available or times out, don't false-positive
-        return False
-
-    return False
-
-
-def _parse_early_complete(text):
-    """Parse an EARLY_COMPLETE: <reason> signal from agent text.
-
-    Agents can signal "I am done" mid-run to avoid burning remaining turns.
-    The marker must appear at the start of a line (not inside code blocks,
-    inline code, quoted blocks, or string literals).
-
-    Returns the reason string if found, or None.
-    """
-    if "EARLY_COMPLETE:" not in text:
-        return None
-
-    # Check if we're inside a code block (triple backticks)
-    in_code_block = False
-    for line in text.splitlines():
-        stripped = line.strip()
-
-        # Toggle code block state on triple-backtick lines
-        if stripped.startswith("```"):
-            in_code_block = not in_code_block
-            continue
-
-        if in_code_block:
-            continue
-
-        # Skip quoted blocks (> prefix)
-        if stripped.startswith(">"):
-            continue
-
-        # Skip lines where EARLY_COMPLETE appears inside inline code (`...`)
-        if "EARLY_COMPLETE:" in stripped:
-            # Check if it's inside backticks on this line
-            before_marker = stripped.split("EARLY_COMPLETE:")[0]
-            # Count backticks before the marker — odd count means inside inline code
-            if before_marker.count("`") % 2 == 1:
-                continue
-
-            # Check if it's inside double quotes
-            if before_marker.count('"') % 2 == 1:
-                continue
-
-            # Valid EARLY_COMPLETE: marker — extract reason
-            idx = stripped.index("EARLY_COMPLETE:")
-            reason = stripped[idx + len("EARLY_COMPLETE:"):].strip()
-            if reason:
-                return reason
-
-    return None
-
-
-def _compute_output_hash(content):
-    """Compute a SHA256 hash of tool result content for loop detection.
-
-    Handles all content formats from Claude stream-json: string, list of
-    content blocks, None, or empty values. Returns a 64-char hex digest.
-
-    Args:
-        content: Tool result content — str, list of content blocks, or None.
-
-    Returns:
-        str: SHA256 hex digest of the normalized content.
-    """
-    if content is None:
-        text = ""
-    elif isinstance(content, str):
-        text = content
-    elif isinstance(content, list):
-        parts = []
-        for block in content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                parts.append(block.get("text", ""))
-        text = " ".join(parts) if parts else ""
-    else:
-        text = str(content)
-    return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()
-
-
-
-# Lookup for tool signature key parameter (used by loop detection)
-_TOOL_SIG_KEY = {
-    "Bash": "command", "Read": "file_path", "Grep": "pattern",
-    "Glob": "pattern", "Edit": "file_path", "Write": "file_path",
-}
-
-
-def _build_tool_signature(tool_name, tool_input):
-    """Build a fingerprint string for loop detection."""
-    key = _TOOL_SIG_KEY.get(tool_name)
-    param = str(tool_input.get(key, "") if key else
-                next(iter(tool_input.values()), "") if tool_input else "")[:80]
-    return f"{tool_name}|{param}"
-
-def _detect_tool_loop(tool_history, tool_errors, warn_threshold=3,
-                      terminate_threshold=5, tool_output_hashes=None):
-    """Detect when an agent repeats the same failing tool operation.
-
-    Detects two patterns:
-    1. Consecutive: Same tool signature repeated (A-A-A-A)
-    2. Alternating: Two-tool cycle repeated (A-B-A-B-A-B)
-
-    Enhanced to consider error patterns — only triggers on failed operations,
-    not successful ones.
-
-    When tool_output_hashes is provided, uses output hash matching to
-    distinguish true stuck loops (same input AND same output) from retries
-    after external state changes (same input but different output). When
-    consecutive calls have identical output hashes, the effective thresholds
-    are halved because identical output is strong confirmation the agent
-    is stuck in a deterministic loop.
-
-    Args:
-        tool_history: List of tool signatures (tool_name|params)
-        tool_errors: List of error summaries (None if success, string if error)
-        warn_threshold: Number of repetitions before warning (default 3)
-        terminate_threshold: Number of repetitions before termination (default 5)
-        tool_output_hashes: Optional list of SHA256 output hashes per tool call.
-            When provided and consecutive hashes match, thresholds are halved.
-
-    Returns:
-        tuple: (action, count, last_sig) where action is "ok", "warn", or "terminate"
-    """
-    if len(tool_history) < 2:
-        return ("ok", 0, None)
-
-    # Count consecutive occurrences of the last tool signature
-    last_sig = tool_history[-1]
-    last_error = tool_errors[-1] if tool_errors else None
-
-    # If the last operation succeeded (no error), reset the loop counter
-    # This prevents false positives when retrying after fixing a bug
-    if not last_error:
-        return ("ok", 0, last_sig)
-
-    # --- Consecutive same-signature detection (A-A-A-A) ---
-    consecutive = 1
-    consecutive_failures = 1  # count only failing operations
-    consecutive_same_output = 1  # count consecutive identical output hashes
-
-    last_idx = len(tool_history) - 1
-    last_output_hash = (
-        tool_output_hashes[last_idx]
-        if tool_output_hashes and last_idx < len(tool_output_hashes)
-        else None
-    )
-
-    for i in range(len(tool_history) - 2, -1, -1):
-        if tool_history[i] == last_sig:
-            consecutive += 1
-            # Only count if this was also a failure
-            if i < len(tool_errors) and tool_errors[i]:
-                consecutive_failures += 1
-            # Track output hash matches for enhanced loop detection
-            if (last_output_hash is not None
-                    and tool_output_hashes
-                    and i < len(tool_output_hashes)
-                    and tool_output_hashes[i] == last_output_hash):
-                consecutive_same_output += 1
-            else:
-                # Output changed — stop counting same-output streak
-                # (but continue counting same-input streak for base thresholds)
-                last_output_hash = None
-        else:
-            break
-
-    # When outputs are identical, use halved thresholds (stronger stuck signal)
-    # Minimum thresholds: warn at 2, terminate at 3
-    if consecutive_same_output >= 2 and tool_output_hashes:
-        effective_warn = max(2, warn_threshold // 2)
-        effective_terminate = max(3, terminate_threshold // 2)
-    else:
-        effective_warn = warn_threshold
-        effective_terminate = terminate_threshold
-
-    # Check consecutive detection first
-    if consecutive_failures >= effective_terminate:
-        return ("terminate", consecutive_failures, last_sig)
-    elif consecutive_failures >= effective_warn:
-        return ("warn", consecutive_failures, last_sig)
-
-    # --- Alternating two-tool cycle detection (A-B-A-B) ---
-    # Only check if we have at least 4 entries and consecutive didn't trigger
-    if len(tool_history) >= 4:
-        sig_a = tool_history[-1]
-        sig_b = tool_history[-2]
-        if sig_a != sig_b:
-            # Count how many entries match the A-B alternating pattern
-            alternating_count = 0
-            for i in range(len(tool_history) - 1, -1, -1):
-                pos_in_pair = (len(tool_history) - 1 - i) % 2
-                expected = sig_a if pos_in_pair == 0 else sig_b
-                if tool_history[i] == expected:
-                    # Only count if this entry was a failure
-                    if i < len(tool_errors) and tool_errors[i]:
-                        alternating_count += 1
-                    else:
-                        break  # success breaks the alternating failure chain
-                else:
-                    break
-
-            # Alternating thresholds are +1 above consecutive thresholds
-            # because the pattern involves two distinct signatures.
-            # With defaults (warn=3, terminate=5): warn at 4, terminate at 6.
-            if alternating_count >= terminate_threshold + 1:
-                return ("terminate", alternating_count, f"{sig_a} <-> {sig_b}")
-            elif alternating_count >= warn_threshold + 1:
-                return ("warn", alternating_count, f"{sig_a} <-> {sig_b}")
-
-    return ("ok", consecutive_failures, last_sig)
-
-
-
-def _build_streaming_result(turn_count, duration, has_any_file_change,
-                            early_term_reason, agent_signaled_done,
-                            early_complete_reason, result_data, all_text_chunks):
-    """Build the result dict from run_agent_streaming state."""
-    result = {
-        "success": False,
-        "result_text": "",
-        "num_turns": turn_count,
-        "duration": duration,
-        "cost": None,
-        "errors": [],
-        "has_file_changes": has_any_file_change,
-    }
-
-    if early_term_reason:
-        result["errors"].append(early_term_reason)
-        result["early_terminated"] = True
-        result["early_term_reason"] = early_term_reason
-
-    if agent_signaled_done and not early_term_reason:
-        result["early_completed"] = True
-        result["early_complete_reason"] = early_complete_reason
-
-    if result_data:
-        final_text = result_data.get("result", "")
-        if ("RESULT:" not in final_text and all_text_chunks
-                and any("RESULT:" in chunk for chunk in all_text_chunks)):
-            result["result_text"] = "\n".join(all_text_chunks)
-        else:
-            result["result_text"] = final_text
-        result["num_turns"] = result_data.get("num_turns", turn_count)
-        result["cost"] = result_data.get("total_cost_usd")
-
-        subtype = result_data.get("subtype", "")
-        if subtype == "error_max_turns":
-            result["success"] = True
-            result["errors"].append("Agent hit max turns limit")
-        elif result_data.get("is_error"):
-            result["errors"].append(
-                f"Agent error: {result_data.get('result', 'unknown')}")
-        else:
-            result["success"] = not bool(early_term_reason)
-    elif agent_signaled_done and not early_term_reason:
-        result["result_text"] = "\n".join(all_text_chunks)
-        result["success"] = True
-    else:
-        result["result_text"] = "\n".join(all_text_chunks)
-        if has_any_file_change and not early_term_reason:
-            result["success"] = True
-            result["errors"].append("No result message from agent (process exited), "
-                                    "but file changes detected — treating as partial success")
-
-    return result
+# _get_budget_message, _check_cost_limit, _check_git_changes,
+# _parse_early_complete, _compute_output_hash, _TOOL_SIG_KEY,
+# _build_tool_signature, _detect_tool_loop,
+# _build_streaming_result extracted to equipa/monitoring.py
 
 async def run_agent_streaming(cmd, role="developer", timeout=None, output=None,
                               max_turns=None, task_id=None, run_id=None,
@@ -3343,28 +2535,7 @@ async def run_agent_streaming(cmd, role="developer", timeout=None, output=None,
 
 # --- Circuit Breakers ---
 
-def validate_output(result):
-    """Check if agent output contains the expected structured response.
-
-    Returns (is_valid, reason) tuple.
-    """
-    if not result["success"]:
-        return False, "Agent reported failure"
-
-    text = result.get("result_text", "")
-    if not text:
-        return False, "No output from agent"
-
-    # Check for the structured RESULT: marker
-    if "RESULT:" in text:
-        return True, "Structured output found"
-
-    # Agent might have done useful work without the marker
-    # (e.g., hit max turns). Check if there's substantial output.
-    if len(text) > 100:
-        return True, "Substantial output (no RESULT marker)"
-
-    return False, "Output too short and missing RESULT marker"
+# validate_output extracted to equipa/parsing.py
 
 
 async def run_agent_with_retries(cmd, task, max_retries):
@@ -3401,148 +2572,13 @@ async def run_agent_with_retries(cmd, task, max_retries):
 
 
 # --- Output Parsers (Phase 2) ---
-
-def _parse_structured_output(text, schema):
-    """Generic parser for structured agent output with MARKER: value lines.
-
-    Schema is a dict mapping marker names to their types:
-        str   — single-line string value
-        int   — single-line integer value
-        list  — multi-line bullet list (lines starting with "- ")
-    Returns a dict with parsed values.
-    """
-    result = {}
-    for marker, typ in schema.items():
-        if typ is list:
-            result[marker.lower().replace(" ", "_")] = []
-        elif typ is int:
-            result[marker.lower().replace(" ", "_")] = 0
-        else:
-            result[marker.lower().replace(" ", "_")] = "" if marker != "RESULT" else "unknown"
-
-    if not text:
-        return result
-
-    current_list_key = None
-    for line in text.splitlines():
-        stripped = line.strip()
-
-        # Check all schema markers
-        matched = False
-        for marker, typ in schema.items():
-            key = marker.lower().replace(" ", "_")
-            if stripped.startswith(marker + ":"):
-                value = stripped.split(":", 1)[1].strip()
-                if typ is int:
-                    try:
-                        result[key] = int(value)
-                    except ValueError:
-                        pass
-                elif typ is list:
-                    current_list_key = key
-                else:
-                    result[key] = value.lower() if marker == "RESULT" else value
-                if typ is not list:
-                    current_list_key = None
-                matched = True
-                break
-
-        # Collect bullet items for list sections
-        if not matched and current_list_key and stripped.startswith("- "):
-            item = stripped[2:].strip()
-            if item.lower() != "none":
-                result[current_list_key].append(item)
-        elif not matched and stripped and not stripped.startswith("-"):
-            current_list_key = None
-
-    return result
-
-
-# Schemas for structured agent output parsing
-_TESTER_SCHEMA = {
-    "RESULT": str, "TEST_FRAMEWORK": str, "TESTS_RUN": int,
-    "TESTS_PASSED": int, "TESTS_FAILED": int, "SUMMARY": str,
-    "FAILURE_DETAILS": list, "RECOMMENDATIONS": list,
-}
-
-_DEVELOPER_FILES_SCHEMA = {"FILES_CHANGED": list}
-
-
-def parse_tester_output(result_text):
-    """Parse structured output from the Tester agent."""
-    parsed = _parse_structured_output(result_text, _TESTER_SCHEMA)
-    # Backward compat: default test_framework to "none"
-    if not parsed.get("test_framework"):
-        parsed["test_framework"] = "none"
-    return parsed
-
-
-def parse_developer_output(result_text):
-    """Extract FILES_CHANGED list from developer output."""
-    parsed = _parse_structured_output(result_text, _DEVELOPER_FILES_SCHEMA)
-    return parsed.get("files_changed", [])
+# _parse_structured_output, _TESTER_SCHEMA, _DEVELOPER_FILES_SCHEMA,
+# parse_tester_output, parse_developer_output extracted to equipa/parsing.py
 
 
 # --- Session Compaction (Phase 2) ---
 
-def build_compaction_summary(role, result, cycle, task):
-    """Compact agent output into a concise summary preserving actionable details.
-
-    Uses compact_agent_output() to extract structured data (RESULT, FILES_CHANGED,
-    BLOCKERS, SUMMARY) from raw output instead of passing raw tail content.
-    Target: ~200 words max to prevent context rot across cycles.
-    """
-    text = result.get("result_text", "")
-    # Compact to 200 words max, preserving file paths and error messages
-    compacted = compact_agent_output(text, max_words=200)
-
-    summary = (
-        f"## Prior Work Summary (Cycle {cycle}, {role})\n"
-        f"Task: #{task['id']} - {task['title']}\n"
-        f"Turns used: {result.get('num_turns', '?')}\n"
-        f"---\n"
-        f"{compacted}\n"
-    )
-    return summary
-
-
-def build_test_failure_context(test_results, cycle):
-    """Format Tester failures + recommendations for the Developer's next attempt.
-
-    Returns a string to append to the Developer's system prompt.
-    Caps output to prevent unbounded context growth: max 5 failure details,
-    each truncated to 200 chars; max 3 recommendations.
-    """
-    lines = [
-        f"## Test Failures from Cycle {cycle}",
-        "",
-        f"The Tester agent ran {test_results['tests_run']} tests "
-        f"using {test_results['test_framework']}.",
-        f"**{test_results['tests_failed']} tests failed.**",
-        "",
-    ]
-
-    if test_results["failure_details"]:
-        lines.append("### Failing Tests:")
-        # Cap at 5 details, truncate each to 200 chars
-        for detail in test_results["failure_details"][:5]:
-            truncated = detail[:200] + "..." if len(detail) > 200 else detail
-            lines.append(f"- {truncated}")
-        remaining = len(test_results["failure_details"]) - 5
-        if remaining > 0:
-            lines.append(f"- ...and {remaining} more failure(s)")
-        lines.append("")
-
-    if test_results["recommendations"]:
-        lines.append("### Tester Recommendations:")
-        # Cap at 3 recommendations
-        for rec in test_results["recommendations"][:3]:
-            truncated = rec[:200] + "..." if len(rec) > 200 else rec
-            lines.append(f"- {truncated}")
-        lines.append("")
-
-    lines.append("**Fix these test failures. Do NOT skip or delete failing tests.**")
-    lines.append("")
+# build_compaction_summary, build_test_failure_context extracted to equipa/parsing.py
 
     return "\n".join(lines)
 
@@ -3803,195 +2839,8 @@ async def _handle_preflight_failure(task, project_dir, project_context,
 
 
 # --- Loop Detection ---
-
-# Thresholds for loop detection
-LOOP_WARNING_THRESHOLD = 3   # inject "try different approach" warning
-LOOP_TERMINATE_THRESHOLD = 5  # terminate agent early and mark blocked
-
-
-class LoopDetector:
-    """Detect when an agent repeats the same failing pattern across cycles.
-
-    Tracks fingerprints of agent output (error messages, result status,
-    blockers) and detects repetition. Legitimate retries (where the agent
-    makes changes between attempts) are excluded from repetition counts.
-
-    Usage:
-        detector = LoopDetector()
-        for cycle in ...:
-            result = await run_agent(cmd)
-            action = detector.record(result, cycle)
-            if action == "terminate":
-                break
-            elif action == "warn":
-                compaction_history.append(detector.warning_message())
-    """
-
-    def __init__(self, warning_threshold=LOOP_WARNING_THRESHOLD,
-                 terminate_threshold=LOOP_TERMINATE_THRESHOLD):
-        self.warning_threshold = warning_threshold
-        self.terminate_threshold = terminate_threshold
-        self.fingerprints = []      # ordered list of fingerprints per cycle
-        self.consecutive_same = 0   # consecutive identical fingerprints
-        self.last_fingerprint = None
-        self.warned = False         # have we injected a warning already?
-
-    def _fingerprint(self, result):
-        """Extract a normalized fingerprint from agent output.
-
-        The fingerprint captures the essential pattern of what the agent did
-        and what went wrong. It includes:
-        - The RESULT: line (success/blocked/failed)
-        - Error messages from the result dict
-        - The BLOCKERS: section content
-        - The SUMMARY: line
-
-        Files changed are used to detect legitimate retries — if files differ
-        between cycles, the repetition counter resets.
-        """
-        text = result.get("result_text", "") if isinstance(result, dict) else ""
-        errors = result.get("errors", []) if isinstance(result, dict) else []
-
-        parts = []
-
-        # Extract structured output markers
-        for line in text.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("RESULT:"):
-                parts.append(stripped.split(":", 1)[1].strip().lower())
-            elif stripped.startswith("BLOCKERS:"):
-                blocker_val = stripped.split(":", 1)[1].strip().lower()
-                if blocker_val and blocker_val != "none":
-                    parts.append(f"blocker:{blocker_val}")
-            elif stripped.startswith("SUMMARY:"):
-                parts.append(f"summary:{stripped.split(':', 1)[1].strip().lower()}")
-
-        # Include error messages (normalized)
-        for err in errors[:3]:
-            normalized = err.lower().strip()[:200]
-            parts.append(f"error:{normalized}")
-
-        return "|".join(sorted(parts)) if parts else "empty"
-
-    def _get_files_changed(self, result):
-        """Extract FILES_CHANGED from result text for retry detection."""
-        text = result.get("result_text", "") if isinstance(result, dict) else ""
-        return parse_developer_output(text)
-
-    def record(self, result, cycle):
-        """Record a cycle result and return the recommended action.
-
-        Returns:
-            "ok"        - no loop detected, continue normally
-            "warn"      - repetition detected (>=warning_threshold), inject warning
-            "terminate" - severe repetition (>=terminate_threshold), stop the agent
-        """
-        fp = self._fingerprint(result)
-        files = self._get_files_changed(result)
-        self.fingerprints.append((cycle, fp, files))
-
-        if fp == self.last_fingerprint:
-            # Same pattern — but check if files changed (legitimate retry)
-            prev_files = self.fingerprints[-2][2] if len(self.fingerprints) >= 2 else []
-            if sorted(files) != sorted(prev_files) and files:
-                # Different files touched — this is a real retry, reset counter
-                self.consecutive_same = 1
-            else:
-                self.consecutive_same += 1
-        else:
-            self.consecutive_same = 1
-            self.last_fingerprint = fp
-
-        if self.consecutive_same >= self.terminate_threshold:
-            return "terminate"
-        elif self.consecutive_same >= self.warning_threshold and not self.warned:
-            self.warned = True
-            return "warn"
-
-        return "ok"
-
-    def warning_message(self):
-        """Build a warning to inject into the agent's next prompt context."""
-        return (
-            "## LOOP DETECTED — Try a Different Approach\n\n"
-            "The orchestrator has detected that you are repeating the same "
-            "failing pattern for multiple consecutive cycles. Your last "
-            f"{self.consecutive_same} attempts produced identical error "
-            "signatures.\n\n"
-            "**You MUST try a fundamentally different approach:**\n"
-            "- If a file edit keeps failing, try a different file or strategy\n"
-            "- If a build error persists, investigate the root cause instead of retrying\n"
-            "- If you are blocked, report it as a blocker rather than retrying\n"
-            "- If you tried approach A three times, try approach B or C\n\n"
-            "**If you repeat the same approach again, the orchestrator will "
-            "terminate your session and mark the task as blocked.**\n"
-        )
-
-    def termination_summary(self):
-        """Build an error summary string for agent_runs.error_summary."""
-        return (
-            f"Loop detected: agent repeated the same failing pattern "
-            f"{self.consecutive_same} times. Last fingerprint: "
-            f"{self.last_fingerprint[:200] if self.last_fingerprint else 'unknown'}"
-        )
-
-
-# --- Dynamic Turn Budget ---
-
-def calculate_dynamic_budget(max_turns):
-    """Calculate the starting turn budget for an agent.
-
-    Starts at DYNAMIC_BUDGET_START_RATIO of max_turns, with a floor of
-    DYNAMIC_BUDGET_MIN_TURNS to ensure agents can at least read files.
-
-    Returns (starting_budget, max_turns) tuple.
-    """
-    starting = max(DYNAMIC_BUDGET_MIN_TURNS, int(max_turns * DYNAMIC_BUDGET_START_RATIO))
-    # Don't exceed the max
-    starting = min(starting, max_turns)
-    return starting, max_turns
-
-
-def adjust_dynamic_budget(current_budget, max_turns, result_text):
-    """Adjust dynamic turn budget based on agent output.
-
-    - If FILES_CHANGED found in output: extend by DYNAMIC_BUDGET_EXTEND_TURNS (up to max)
-    - If RESULT: blocked found in output: reduce remaining by DYNAMIC_BUDGET_BLOCKED_RATIO
-    - Otherwise: no change
-
-    Returns the new budget.
-    """
-    if not result_text:
-        return current_budget
-
-    result_text_lower = result_text.lower()
-
-    # Check for RESULT: blocked — reduce budget
-    if "result: blocked" in result_text_lower or "result:blocked" in result_text_lower:
-        reduced = max(DYNAMIC_BUDGET_MIN_TURNS,
-                      int(current_budget * DYNAMIC_BUDGET_BLOCKED_RATIO))
-        return min(reduced, max_turns)
-
-    # Check for FILES_CHANGED with actual content (not "none" or empty)
-    files_changed_patterns = ["files_changed:", "files changed:"]
-    has_files_changed = False
-    for pattern in files_changed_patterns:
-        idx = result_text_lower.find(pattern)
-        if idx >= 0:
-            # Extract the value after the marker
-            after = result_text[idx + len(pattern):idx + len(pattern) + 200].strip()
-            # Consider it real if it's not "none", empty, or just whitespace
-            first_line = after.split("\n")[0].strip()
-            if first_line and first_line.lower() not in ("none", "n/a", "no files", ""):
-                has_files_changed = True
-                break
-
-    if has_files_changed:
-        extended = min(current_budget + DYNAMIC_BUDGET_EXTEND_TURNS, max_turns)
-        return extended
-
-    return current_budget
-
+# LOOP_WARNING_THRESHOLD, LOOP_TERMINATE_THRESHOLD, LoopDetector class,
+# calculate_dynamic_budget, adjust_dynamic_budget extracted to equipa/monitoring.py
 
 # --- Provider-Aware Agent Dispatch ---
 
@@ -5099,42 +3948,7 @@ async def run_manager_loop(goal, project_id, project_dir, project_context, args,
     return "rounds_exhausted", max_rounds, all_completed, all_blocked, total_cost, total_duration
 
 
-def print_manager_summary(goal, outcome, rounds, completed, blocked, cost, duration,
-                          output=None):
-    """Print a formatted summary of the Manager mode run."""
-    outcome_messages = {
-        "goal_complete": "Goal achieved successfully",
-        "goal_blocked": "Goal blocked — cannot proceed",
-        "planner_failed": "Planner failed to create tasks",
-        "rounds_exhausted": f"Max rounds ({rounds}) exhausted without completion",
-    }
-
-    is_success = outcome == "goal_complete"
-
-    log("\n" + "#" * 60, output)
-    log("EQUIPA MANAGER MODE SUMMARY", output)
-    log("#" * 60, output)
-
-    log(f"\nGoal:      {goal[:100]}", output)
-    log(f"Verdict:   {'SUCCESS' if is_success else 'INCOMPLETE'}", output)
-    log(f"Outcome:   {outcome_messages.get(outcome, outcome)}", output)
-    log(f"Rounds:    {rounds}", output)
-    log(f"Tasks:     {len(completed)} completed, {len(blocked)} blocked", output)
-    log(f"Duration:  {duration:.1f}s total", output)
-    if cost > 0:
-        log(f"Cost:      ${cost:.4f} total", output)
-
-    if completed:
-        log(f"\nCompleted Tasks:", output)
-        for t in completed:
-            log(f"  - #{t['id']} {t['title']}", output)
-
-    if blocked:
-        log(f"\nBlocked Tasks:", output)
-        for t in blocked:
-            log(f"  - #{t['id']} {t['title']}", output)
-
-    log("\n" + "#" * 60, output)
+# print_manager_summary extracted to equipa/output.py
 
 
 # --- Verification ---
@@ -5164,75 +3978,7 @@ def verify_task_updated(task_id):
         conn.close()
 
 
-# --- Output ---
-
-def _print_task_summary(title, task, result, verified, verify_msg,
-                       cycles=None, outcome=None):
-    """Print a formatted summary of an agent run (single or dev-test)."""
-    outcome_messages = {
-        "tests_passed": "All tests passed",
-        "no_tests": "No tests found, Developer result accepted",
-        "developer_blocked": "Developer marked task as blocked",
-        "developer_timeout": "Developer agent timed out",
-        "developer_failed": "Developer agent failed",
-        "tester_blocked": "Tester could not run (build error, missing deps)",
-        "tester_timeout": "Tester agent timed out",
-        "no_progress": f"No file changes for {NO_PROGRESS_LIMIT} consecutive cycles",
-        "cycles_exhausted": f"All {MAX_DEV_TEST_CYCLES} fix-test cycles used without passing",
-    }
-
-    is_success = (outcome in ("tests_passed", "no_tests") if outcome
-                  else result.get("success", False))
-
-    print("\n" + "=" * 60)
-    print(title)
-    print("=" * 60)
-
-    print(f"\nTask:      #{task['id']} - {task['title']}")
-    print(f"Project:   {task.get('project_name', 'Unknown')}")
-    print(f"Verdict:   {'SUCCESS' if is_success else 'BLOCKED' if outcome else ('SUCCESS' if result.get('success') else 'FAILED')}")
-    if cycles is not None:
-        print(f"Cycles:    {cycles}/{MAX_DEV_TEST_CYCLES}")
-    if outcome:
-        print(f"Outcome:   {outcome_messages.get(outcome, outcome)}")
-    if not outcome:
-        print(f"Turns:     {result.get('num_turns', 0)}")
-    print(f"Duration:  {result.get('duration', 0):.1f}s{'  total' if outcome else ''}")
-
-    cost = result.get("cost")
-    if cost is not None:
-        print(f"Cost:      ${cost:.4f}{'  total' if outcome else ''}")
-
-    print(f"\nDB Verify: {'PASS' if verified else 'FAIL'} - {verify_msg}")
-
-    if result.get("errors"):
-        print("\nErrors:")
-        for err in result["errors"]:
-            print(f"  - {err[:200]}{'...' if len(err) > 200 else ''}")
-
-    output_text = result.get("result_text", "")
-    if output_text:
-        label = "Last Agent Output" if outcome else "Agent Output"
-        print(f"\n{label} (last 500 chars):")
-        print("-" * 40)
-        tail = output_text[-500:] if len(output_text) > 500 else output_text
-        print(tail.encode("ascii", errors="replace").decode("ascii"))
-
-    print("\n" + "=" * 60)
-
-
-def print_summary(task, result, verified, verify_msg):
-    """Print a formatted summary of a single agent run."""
-    _print_task_summary("EQUIPA AGENT RUN SUMMARY",
-                        task, result, verified, verify_msg)
-
-
-def print_dev_test_summary(task, result, cycles, outcome, verified, verify_msg):
-    """Print a formatted summary of the dev-test loop run."""
-    _print_task_summary("EQUIPA DEV-TEST LOOP SUMMARY",
-                        task, result, verified, verify_msg,
-                        cycles=cycles, outcome=outcome)
-
+# _print_task_summary, print_summary, print_dev_test_summary extracted to equipa/output.py
 
 # _is_git_repo extracted to equipa/git_ops.py
 
@@ -5481,80 +4227,8 @@ async def run_parallel_goals(resolved_goals, defaults, args):
     print_parallel_summary(results)
 
 
-def _print_batch_summary(title, results, mode="goals"):
-    """Print summary for parallel goals or auto-dispatch results.
-
-    mode="goals": expects results with outcome, completed, blocked, goal keys.
-    mode="dispatch": expects results with tasks_completed, tasks_blocked, codename keys.
-    """
-    print(f"\n{'#' * 60}")
-    print(title)
-    print(f"{'#' * 60}")
-
-    total_completed, total_blocked = 0, 0
-    total_cost, total_duration = 0.0, 0.0
-
-    for r in results:
-        if isinstance(r, Exception):
-            print(f"\n  [?] EXCEPTION: {r}")
-            continue
-
-        if mode == "goals":
-            n_completed = len(r.get("completed", []))
-            n_blocked = len(r.get("blocked", []))
-            cost, duration = r.get("cost", 0.0), r.get("duration", 0.0)
-            status = "OK" if r.get("outcome") == "goal_complete" else r.get("outcome", "?").upper()
-            label = f"[{r.get('index', 0) + 1}] {r.get('project_name', '?')}"
-            print(f"\n  {label} — {status}")
-            print(f"      Goal: {r.get('goal', '')[:80]}")
-            print(f"      Rounds: {r.get('rounds', '?')}, "
-                  f"Tasks: {n_completed} done / {n_blocked} blocked, "
-                  f"Duration: {duration:.1f}s")
-        else:  # dispatch
-            n_completed = len(r.get("tasks_completed", []))
-            n_blocked = len(r.get("tasks_blocked", []))
-            cost, duration = r.get("total_cost", 0.0), r.get("total_duration", 0.0)
-            codename = r.get("codename", "?")
-            if r.get("error"):
-                print(f"\n  [{codename}] ERROR: {r['error']}")
-                total_cost += cost; total_duration += duration
-                continue
-            status = ("ALL DONE" if n_blocked == 0 and n_completed > 0
-                      else "NO TASKS" if n_completed == 0 and n_blocked == 0
-                      else "PARTIAL")
-            print(f"\n  [{codename}] {status}")
-            print(f"      Tasks: {n_completed} completed, {n_blocked} blocked "
-                  f"(of {r.get('tasks_attempted', '?')} attempted)")
-            print(f"      Duration: {duration:.1f}s")
-            for t in r.get("tasks_completed", []):
-                print(f"        + #{t['id']} {t['title']}")
-            for t in r.get("tasks_blocked", []):
-                print(f"        x #{t['id']} {t['title']}")
-
-        total_completed += n_completed
-        total_blocked += n_blocked
-        total_cost += cost
-        total_duration += duration
-        if cost > 0:
-            print(f"      Cost: ${cost:.4f}")
-
-    print(f"\n  {'=' * 40}")
-    items = f"{len(results)} goals" if mode == "goals" else f"{total_completed} completed, {total_blocked} blocked"
-    print(f"  TOTALS: {items}")
-    print(f"  Duration: {total_duration:.1f}s")
-    if total_cost > 0:
-        print(f"  Cost: ${total_cost:.4f}")
-    print(f"\n{'#' * 60}")
-
-
-def print_parallel_summary(results):
-    """Print a combined summary table for all parallel goals."""
-    _print_batch_summary("EQUIPA PARALLEL GOALS SUMMARY", results, mode="goals")
-
-
-def print_dispatch_summary(results):
-    """Final report: tasks completed/blocked per project."""
-    _print_batch_summary("AUTO-RUN DISPATCH SUMMARY", results, mode="dispatch")
+# _print_batch_summary, print_parallel_summary, print_dispatch_summary
+# extracted to equipa/output.py
 
 
 # --- GitHub Repo Setup (Phase 4B) ---
@@ -5997,49 +4671,7 @@ async def run_auto_dispatch(scored, config, args):
     print_dispatch_summary(results)
 
 
-# --- Auto-Run: Output Formatting (Phase 5) ---
-
-def print_dispatch_plan(scored, config):
-    """Preview: which projects will run, scores, task counts."""
-    max_tasks = config.get("max_tasks_per_project", 5)
-    max_concurrent = config.get("max_concurrent", 4)
-
-    print(f"\n{'#' * 60}")
-    print("AUTO-RUN DISPATCH PLAN")
-    print(f"{'#' * 60}")
-    print(f"\n  Max concurrent: {max_concurrent}")
-    print(f"  Max tasks/project: {max_tasks}")
-    print(f"  Model: {config.get('model', DEFAULT_MODEL)}")
-    max_turns_val = config.get('max_turns', DEFAULT_MAX_TURNS)
-    start_budget, _ = calculate_dynamic_budget(max_turns_val)
-    print(f"  Max turns: {max_turns_val} (dynamic start: {start_budget})")
-    print()
-
-    total_tasks = 0
-    for i, proj in enumerate(scored, 1):
-        counts = proj["counts"]
-        capped = min(proj["total_todo"], max_tasks)
-        total_tasks += capped
-
-        codename_lower = proj.get("codename", "").lower().strip()
-        has_dir = codename_lower in PROJECT_DIRS and Path(PROJECT_DIRS.get(codename_lower, "")).exists()
-
-        print(f"  [{i}] {proj['project_name']} (ID: {proj['project_id']}, "
-              f"codename: {proj.get('codename', '?')})")
-        print(f"      Score: {proj.get('score', '?')} | Status: {proj.get('status', '?')}")
-        print(f"      Tasks: {capped}/{proj['total_todo']} "
-              f"(C:{counts['critical']} H:{counts['high']} "
-              f"M:{counts['medium']} L:{counts['low']})")
-        print(f"      Dir: {'OK' if has_dir else 'MISSING'}")
-        print()
-
-    print(f"  TOTAL: {len(scored)} projects, {total_tasks} tasks to attempt")
-    print(f"\n{'#' * 60}")
-
-
-def print_dispatch_summary(results):
-    """Final report: tasks completed/blocked per project."""
-    _print_batch_summary("AUTO-RUN DISPATCH SUMMARY", results, mode="dispatch")
+# print_dispatch_plan, print_dispatch_summary extracted to equipa/output.py
 
 
 def parse_task_ids(task_str):
