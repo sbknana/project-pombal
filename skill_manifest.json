@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generated_at": "2026-03-17T18:23:50Z",
+  "generated_at": "2026-03-23T19:38:10Z",
   "description": "SHA-256 hashes of prompt and skill files for integrity verification",
   "files": {
-    "prompts/_common.md": "a368925eb0c88f936fd524f0124ae2a39c4e9d3694e7690bb1458f63d541f484",
+    "prompts/_common.md": "b97eb9c70a4335e55577e0bc0b99ebb53359c5049fa84eef5e1e56325c907a69",
     "prompts/code-reviewer.md": "3be97cbf2e1b741f3cc64a23a5bca97ad68c9ad1789ec66d5663b4d6a382b9fd",
     "prompts/debugger.md": "6e71bb6f1159ceff15da64e1046ddf0adb4ccecbc6905c062b28b0a41df7ad51",
     "prompts/developer.md": "a3b0899bd642784599f95cfbe62450a7b372fca7c16081e0515e2c630514eb29",
@@ -11,6 +11,10 @@
     "prompts/evaluator.md": "662d3fcfae845e50da996a4288c8b5a59f26c3c3a2f8fa8ced8633242a62673b",
     "prompts/frontend-designer.md": "944781dd2128d3d5b8495187f51836114586e38379432099d882be2bda752a35",
     "prompts/integration-tester.md": "3a11be5f55c4ab335bdeea0165bedfc0a46c5a1992029b014fc0a762112a551d",
+    "prompts/languages/csharp.md": "f2778cec20d15de9cd08cf528ba0ff344849ccff3381590f9a86dc5aa825671c",
+    "prompts/languages/go.md": "345f341a92efb10d03c8fe8e2f7b6d0ef3661a75e241e8869a51c515ce64f9c7",
+    "prompts/languages/python.md": "89bd55b1954a3e796ccd319ea930b6ad9c3eb98a677b53dc09e9c728c17228d2",
+    "prompts/languages/typescript.md": "ee79e794ffdb5e4649984b82d7232394271187e9dc4f939482f67897f373cd3c",
     "prompts/multiplayer-tester.md": "d3e44676c308f78b19dd73f541baa1aeae72efe8c86d536c9a323df953e2e4e6",
     "prompts/planner.md": "a59be9de7529c2af975b9846a9538ffad19014d8be85f49aec39e279d645687f",
     "prompts/qa-tester.md": "4ec5e05dbbf41b0f83d7ef8ef3d82c69844d4be90eabaf56b414ef41aa3f355e",
