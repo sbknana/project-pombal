@@ -3,6 +3,7 @@
 Phase 1 leaf modules: constants, checkpoints, git_ops.
 Phase 2 low-coupling modules: output, messages, parsing, monitoring.
 Phase 3 database layer: db, tasks, lessons, roles.
+Phase 4 core engine: security, prompts, reflexion, agent_runner, preflight, loops, manager.
 All public symbols are re-exported here for backward compatibility.
 
 Copyright 2026 Forgeborn
@@ -199,6 +200,70 @@ from equipa.roles import (
     get_role_turns,
 )
 
+# --- Security (equipa.security) ---
+from equipa.security import (
+    _make_untrusted_delimiter,
+    generate_skill_manifest,
+    verify_skill_integrity,
+    wrap_untrusted,
+    write_skill_manifest,
+)
+
+# --- Prompts (equipa.prompts) ---
+from equipa.prompts import (
+    _last_prompt_version,
+    build_checkpoint_context,
+    build_evaluator_prompt,
+    build_planner_prompt,
+    build_system_prompt,
+    build_task_prompt,
+)
+
+# --- Reflexion (equipa.reflexion) ---
+from equipa.reflexion import (
+    INITIAL_Q_VALUE,
+    REFLEXION_PROMPT,
+    maybe_run_reflexion,
+    run_reflexion_agent,
+)
+
+# --- Agent Runner (equipa.agent_runner) ---
+from equipa.agent_runner import (
+    build_cli_command,
+    dispatch_agent,
+    run_agent,
+    run_agent_streaming,
+    run_agent_with_retries,
+)
+
+# --- Preflight (equipa.preflight) ---
+from equipa.preflight import (
+    _dispatch_autofix_agent,
+    _handle_preflight_failure,
+    _resolve_build_command,
+    _run_install_cmd,
+    auto_install_dependencies,
+    preflight_build_check,
+)
+
+# --- Loops (equipa.loops) ---
+from equipa.loops import (
+    _create_security_lessons,
+    _extract_security_findings,
+    run_dev_test_loop,
+    run_quality_scoring,
+    run_security_review,
+)
+
+# --- Manager (equipa.manager) ---
+from equipa.manager import (
+    parse_evaluator_output,
+    parse_planner_output,
+    run_evaluator_agent,
+    run_manager_loop,
+    run_planner_agent,
+)
+
 __all__ = [
     # Constants
     "AUTOFIX_COST_LIMIT",
@@ -356,4 +421,47 @@ __all__ = [
     "_discover_roles",
     "_accumulate_cost",
     "_apply_cost_totals",
+    # Security
+    "_make_untrusted_delimiter",
+    "wrap_untrusted",
+    "generate_skill_manifest",
+    "write_skill_manifest",
+    "verify_skill_integrity",
+    # Prompts
+    "_last_prompt_version",
+    "build_task_prompt",
+    "build_system_prompt",
+    "build_checkpoint_context",
+    "build_planner_prompt",
+    "build_evaluator_prompt",
+    # Reflexion
+    "REFLEXION_PROMPT",
+    "INITIAL_Q_VALUE",
+    "run_reflexion_agent",
+    "maybe_run_reflexion",
+    # Agent Runner
+    "build_cli_command",
+    "run_agent",
+    "run_agent_streaming",
+    "run_agent_with_retries",
+    "dispatch_agent",
+    # Preflight
+    "_run_install_cmd",
+    "auto_install_dependencies",
+    "_resolve_build_command",
+    "preflight_build_check",
+    "_dispatch_autofix_agent",
+    "_handle_preflight_failure",
+    # Loops
+    "run_quality_scoring",
+    "run_security_review",
+    "_extract_security_findings",
+    "_create_security_lessons",
+    "run_dev_test_loop",
+    # Manager
+    "parse_planner_output",
+    "parse_evaluator_output",
+    "run_planner_agent",
+    "run_evaluator_agent",
+    "run_manager_loop",
 ]
