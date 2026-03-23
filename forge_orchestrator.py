@@ -2281,6 +2281,31 @@ def build_system_prompt(task, project_context, project_dir, role="developer",
     if task_type_supplement:
         prompt = prompt + task_type_supplement
 
+    # --- Language-specific prompt injection ---
+    # Detect project language and load corresponding guidance if available
+    if project_dir:
+        lang_info = detect_project_language(project_dir)
+        lang_prompts_dir = PROMPTS_DIR / "languages"
+        injected_langs = set()
+        for lang_key in lang_info.get("languages", []):
+            lang_prompt_path = lang_prompts_dir / f"{lang_key}.md"
+            if lang_prompt_path.exists() and lang_key not in injected_langs:
+                try:
+                    lang_text = lang_prompt_path.read_text(encoding="utf-8")
+                    frameworks_note = ""
+                    if lang_info.get("frameworks"):
+                        detected = [f for f in lang_info["frameworks"]
+                                    if f not in ("dotnet", "maven", "gradle")]
+                        if detected:
+                            frameworks_note = (
+                                f"\n\nDetected frameworks: {', '.join(detected)}. "
+                                f"Apply framework-specific patterns where relevant."
+                            )
+                    prompt = prompt + "\n\n" + lang_text + frameworks_note
+                    injected_langs.add(lang_key)
+                except OSError:
+                    pass  # File read failed, skip silently
+
     # Budget visibility: tell the agent how many turns it has
     if max_turns and max_turns > 0:
         prompt = prompt + (
