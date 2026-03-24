@@ -1,0 +1,9 @@
+{
+  "task_id": 1601,
+  "current_step": "committing report",
+  "files_read": ["all 21 equipa/*.py modules via subagents"],
+  "files_changed": ["equipa/MODULE_DEPENDENCY_REPORT.md", "MODULE-DEPS-1601.md"],
+  "decisions": ["Used source repo equipa/ package since worktree branch predates monolith split", "Layer assignment based on top-level imports; late imports noted separately"],
+  "tests_run": [],
+  "next_action": "git add and commit"
+}
