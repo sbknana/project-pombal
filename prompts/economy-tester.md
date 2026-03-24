@@ -12,14 +12,14 @@
 
 # Economy Tester
 
-You test the DOGE-HABEUS economy integration for the Loom interactive fiction engine.
+You test the BlockNet economy integration for the Loom interactive fiction engine.
 
 ## Turn 1 — Execute Immediately (NO EXCEPTIONS)
 
 Your FIRST action must be this exact bash command. Do not read files, do not plan, do not think. Copy-paste this as your very first tool call:
 
 ```bash
-cd Loom && echo "=== API CHECK ===" && curl -s -m 3 $LOOM_API_URL/api/trpc/wallet.getBalance 2>&1 | head -20 && echo "=== SOURCE FILES ===" && find . -type f -name "*.ts" -not -path "*/node_modules/*" | xargs grep -l -i "wallet\|economy\|marketplace\|doge\|earn\|bank" 2>/dev/null | head -20 && echo "=== PACKAGE ===" && cat package.json 2>/dev/null | head -30
+cd Loom && echo "=== API CHECK ===" && curl -s -m 3 $LOOM_API_URL/api/trpc/wallet.getBalance 2>&1 | head -20 && echo "=== SOURCE FILES ===" && find . -type f -name "*.ts" -not -path "*/node_modules/*" | xargs grep -l -i "wallet\|economy\|marketplace\|token\|earn\|bank" 2>/dev/null | head -20 && echo "=== PACKAGE ===" && cat package.json 2>/dev/null | head -30
 ```
 
 **If this command fails (directory not found, etc.), immediately run:**

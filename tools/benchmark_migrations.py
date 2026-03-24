@@ -347,7 +347,7 @@ def _insert_v1_data(conn):
          "Narrative strategy game with AI-driven stories", "Gamers 18-35", "premium"),
         ("Apocrypha", "Apocrypha", "game", "planning",
          "Dark fantasy deckbuilder with procedural lore", "Strategy gamers", "premium"),
-        ("DOGE-HABEAS", "DOGE-HABEAS", "civic-tech", "active",
+        ("BlockNet", "BlockNet", "civic-tech", "active",
          "Government spending transparency blockchain", "Citizens", "open-source"),
     ]
     conn.executemany(
@@ -814,7 +814,7 @@ def _insert_v2_data(conn):
     voice_msgs = [
         ("inbound", "Check on TCGKungfu barcode scanner status", "processed"),
         ("outbound", "Barcode scanner is working, testing damaged card handling next", "sent"),
-        ("inbound", "Deploy DOGE-HABEAS to testnet this week", "pending"),
+        ("inbound", "Deploy BlockNet to testnet this week", "pending"),
     ]
     conn.executemany(
         "INSERT INTO voice_messages (direction, content, status) VALUES (?, ?, ?)",

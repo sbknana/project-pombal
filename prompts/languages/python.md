@@ -1,30 +1,42 @@
-# Python Best Practices
+# Python Language Guidelines
 
-## Critical
-- Never use mutable default arguments (`def f(items=[])`). Use `None` and initialize inside.
-- Never use bare `except:`. Always catch specific exceptions or at minimum `except Exception`.
-- Use `with` statements for all file/resource operations (context managers).
-- Never use `eval()` or `exec()` with untrusted input.
+## Style & Formatting
+- Follow PEP 8 conventions. Use 4-space indentation, snake_case for functions and variables, PascalCase for classes.
+- Maximum line length: 88 characters (Black formatter default) or 79 (PEP 8 strict).
+- Use f-strings for string formatting over `.format()` or `%`.
 
-## High
-- Use type hints on all function signatures. Return types matter.
-- Prefer `pathlib.Path` over `os.path` for file operations.
-- Use f-strings for formatting, not `%` or `.format()`.
-- Use `dataclasses` or `NamedTuple` instead of plain dicts for structured data.
-- Use `logging` module, not `print()`, for production code.
+## Type Hints
+- Add type hints to all function signatures: parameters and return types.
+- Use `from __future__ import annotations` for deferred evaluation in Python 3.9 and earlier.
+- Prefer `list[str]` over `List[str]` (Python 3.9+). Use `X | None` over `Optional[X]` (Python 3.10+).
+- Use `TypeAlias` or `type` statement for complex types.
 
-## Style
-- Follow PEP 8. Max line length 120 (not 79 — pragmatic).
-- Use snake_case for functions/variables, PascalCase for classes.
-- Prefer list/dict/set comprehensions over map/filter when readable.
-- Use `isinstance()` not `type()` for type checking.
+## Common Bugs to Avoid
+- **Mutable default arguments:** Never use `def f(items=[])`. Use `def f(items=None)` and assign inside the function body.
+- **Late binding closures:** Variables in closures bind at call time, not definition time. Use default argument binding: `lambda x=x: x`.
+- **Bare except:** Never use `except:` or `except Exception:` without logging or re-raising. Catch specific exceptions.
+- **String-based path manipulation:** Use `pathlib.Path` instead of `os.path.join` and string concatenation.
 
-## Testing
-- Use `pytest` conventions: `test_` prefix, fixtures, parametrize.
-- Use `unittest.mock.patch` for mocking, not monkeypatching globals.
-- Assert specific values, not just truthiness.
+## Async Patterns
+- Use `async def` with `await` for I/O-bound operations.
+- Never call blocking I/O (`time.sleep`, synchronous HTTP) inside async functions — use `asyncio.sleep`, `aiohttp`, or `asyncio.to_thread`.
+- Use `asyncio.gather()` for concurrent coroutines, not sequential awaits in a loop.
+- Always handle `asyncio.CancelledError` in long-running tasks.
 
-## Async
-- Use `asyncio` for I/O-bound concurrency. Never mix sync blocking calls in async code.
-- Use `asyncio.gather()` for parallel async operations.
-- Always use `async with` for async context managers.
+## Testing (pytest)
+- Use `pytest` with fixtures, not `unittest.TestCase`.
+- Use `@pytest.mark.parametrize` for data-driven tests instead of repeated test functions.
+- Use `tmp_path` fixture for temporary files, not `tempfile` directly.
+- Prefer `pytest.raises(ExactException)` over try/except in tests.
+- Use `monkeypatch` for patching — avoid `unittest.mock.patch` decorators when possible.
+
+## Error Handling
+- Use specific exception types. Define custom exceptions for domain errors.
+- Always use `finally:` or context managers (`with`) for resource cleanup.
+- Log exceptions with `logger.exception()` to capture tracebacks.
+- Use `raise ... from err` to preserve exception chains.
+
+## Imports
+- Group imports: stdlib, third-party, local — separated by blank lines.
+- Use absolute imports over relative imports in application code.
+- Never use wildcard imports (`from module import *`).

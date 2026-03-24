@@ -88,16 +88,5 @@
         "max_proposals_per_role": 3,
         "min_runs_for_proposal": 5,
         "min_predicted_improvement": 0.1
-    },
-    "external_roles": {
-        "ai-estimator": {
-            "project": "sparkforge",
-            "project_id": 48,
-            "skill_file": "/srv/forge-share/AI_Stuff/SparkForge/src/skills/estimator-prompt.md",
-            "benchmark_suite": "/srv/forge-share/AI_Stuff/AutoSkill/benchmarks/sparkforge-estimator.json",
-            "metrics_source": "sparkforge.ai_analysis_sessions",
-            "runner": "/srv/forge-share/AI_Stuff/SparkForge/forgesmith_estimator.py",
-            "description": "SparkForge AI electrical estimator — analyzes job photos and suggests materials/labor"
-        }
     }
 }

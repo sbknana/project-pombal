@@ -1,33 +1,52 @@
-# Go Best Practices
+# Go Language Guidelines
 
-## Critical
-- Always check errors. Never use `_` to discard errors unless explicitly documented why.
-- Use `errors.Is()` and `errors.As()` for error comparison, not `==`.
-- Wrap errors with context: `fmt.Errorf("doing X: %w", err)`.
-- Always pass `context.Context` as first parameter to functions that do I/O.
-- Close resources with `defer` immediately after creation.
+## Error Handling
+- Always check returned errors. Never use `_` to discard errors unless the function is documented as infallible.
+- Wrap errors with context using `fmt.Errorf("operation failed: %w", err)` — use `%w` to enable `errors.Is` and `errors.As` unwrapping.
+- Return errors to the caller instead of logging and continuing. Let the caller decide how to handle them.
+- Use sentinel errors (`var ErrNotFound = errors.New("not found")`) for expected error conditions. Use custom error types for errors that carry additional data.
+- Never panic in library code. Reserve `panic` for truly unrecoverable programmer errors.
 
-## High
-- Use `struct{}` for signal channels, not `bool`.
-- Use `sync.WaitGroup` or `errgroup.Group` for goroutine coordination.
-- Never start goroutines without a way to stop them (context cancellation or done channel).
-- Use `context.WithTimeout` or `context.WithCancel` for all async operations.
-- Prefer table-driven tests.
+## Goroutine Safety
+- **Goroutine leaks:** Every `go func()` must have a clear exit path. Use `context.Context` cancellation or `done` channels to signal shutdown.
+- Always pass `context.Context` as the first parameter to functions that do I/O or may block.
+- Use `sync.WaitGroup` or `errgroup.Group` to wait for goroutine completion.
+- Never share variables between goroutines without synchronization — use channels or `sync.Mutex`.
+- Prefer channels for communication, mutexes for state protection.
 
-## Style
-- Use short, descriptive names. Receivers are 1-2 letters (`s` for server, `c` for client).
-- Keep functions short. If a function needs a comment explaining what it does, split it.
-- Use `go vet`, `staticcheck`, and `golangci-lint`.
-- Group imports: stdlib, blank line, external, blank line, internal.
+## Context.Context
+- Thread `context.Context` through all call chains. Never store it in structs.
+- Use `context.WithTimeout` or `context.WithDeadline` for operations that should not run indefinitely.
+- Check `ctx.Err()` or `ctx.Done()` in loops and before expensive operations.
+- Create child contexts with `context.WithValue` only for request-scoped data (trace IDs, auth), never for function parameters.
 
-## Concurrency
-- Never share memory between goroutines without synchronization.
-- Prefer channels for communication, mutexes for protecting shared state.
-- Use `sync.Once` for one-time initialization.
-- Always handle the default case in select with channels.
+## Defer Patterns
+- Use `defer` for cleanup (closing files, releasing locks, closing connections).
+- Remember that `defer` evaluates arguments immediately but executes the call on function return.
+- Be cautious with `defer` inside loops — deferred calls accumulate until the function returns. Use an inner function or explicit close.
+- Use `defer rows.Close()` immediately after obtaining database query results.
+
+## Naming & Style
+- Use short, descriptive names. Single-letter variables are acceptable in small scopes (loop counters, receivers).
+- Exported names are PascalCase, unexported are camelCase.
+- Interface names use the `-er` suffix for single-method interfaces (`Reader`, `Writer`, `Closer`).
+- Package names are lowercase, single-word, and do not repeat the import path.
 
 ## Testing
-- Use `testing.T`, not assertion libraries (keep it stdlib).
-- Use `t.Helper()` in test helpers.
-- Use `t.Parallel()` for independent tests.
-- Use `testdata/` directory for test fixtures.
+- Use table-driven tests with `t.Run()` subtests for comprehensive coverage.
+- Use `t.Helper()` in test utility functions to improve error reporting.
+- Use `t.Parallel()` for tests that can run concurrently.
+- Use `testify/assert` or stdlib comparisons consistently — do not mix approaches.
+- Use `t.TempDir()` for temporary test directories (auto-cleaned).
+
+## Performance
+- Use `strings.Builder` for string concatenation in loops, not `+=`.
+- Prefer `make([]T, 0, expectedLen)` when the slice capacity is known.
+- Use `sync.Pool` for frequently allocated and discarded objects.
+- Profile before optimizing — use `go test -bench` and `pprof`.
+
+## Database
+- Always use parameterized queries. Never interpolate user input into SQL strings.
+- Use `defer rows.Close()` immediately after `db.Query()`.
+- Check `rows.Err()` after the scan loop completes.
+- Use transactions (`db.BeginTx`) for multi-statement operations.

@@ -3,8 +3,6 @@
 
 Ensures database schema is created before any test runs by executing
 schema.sql with CREATE TABLE IF NOT EXISTS semantics.
-Some tests create temp DBs and reset _SCHEMA_ENSURED, so the module-scope
-fixture re-creates tables when needed.
 
 Copyright 2026 Forgeborn
 """
@@ -13,8 +11,6 @@ import re
 import sqlite3
 import sys
 from pathlib import Path
-
-import pytest
 
 # Add parent directory (repo root) to path for imports
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -95,17 +91,11 @@ def pytest_configure(config):
     _ensure_full_schema()
 
 
-@pytest.fixture(autouse=True, scope="module")
-def ensure_test_db_schema():
-    """Re-create schema per module for tests that swap THEFORGE_DB."""
-    import forge_orchestrator
-
-    forge_orchestrator._SCHEMA_ENSURED = False
-    forge_orchestrator.ensure_schema()
-
-
 def pytest_collection_modifyitems(session, config, items):
-    """After collection, call setup_test_data() for modules that define it."""
+    """After collection, call setup_test_data() for modules that define it.
+
+    This replaces the manual setup that was done in each module's run_all_tests().
+    """
     setup_modules = set()
     for item in items:
         module = item.module

@@ -105,10 +105,14 @@ def test_prompt_content_matches_spec():
 
 def test_orchestrator_injection_logic():
     """Test that orchestrator has correct injection logic."""
-    orch_path = Path(__file__).parent.parent / "forge_orchestrator.py"
-    assert orch_path.exists(), "forge_orchestrator.py not found"
+    # After Phase 4 monolith split, task_type logic lives in equipa/prompts.py
+    prompts_path = Path(__file__).parent.parent / "equipa" / "prompts.py"
+    if not prompts_path.exists():
+        # Fallback to monolith for pre-split compatibility
+        prompts_path = Path(__file__).parent.parent / "forge_orchestrator.py"
+    assert prompts_path.exists(), "Neither equipa/prompts.py nor forge_orchestrator.py found"
 
-    with open(orch_path, 'r') as f:
+    with open(prompts_path, 'r') as f:
         orch_code = f.read()
 
     # Check for critical code patterns

@@ -1,31 +1,44 @@
-# TypeScript Best Practices
+# TypeScript Language Guidelines
 
-## Critical
-- Enable `strict: true` in tsconfig. Never use `any` unless absolutely unavoidable.
-- Always handle Promise rejections. Use try/catch with async/await.
-- Never use `!` (non-null assertion) to silence the compiler — fix the actual type.
-- Validate all external input at system boundaries (API params, user input, env vars).
+## Strict Mode
+- Always enable `strict: true` in `tsconfig.json`. Never disable individual strict checks.
+- Never use `any` — use `unknown` for truly unknown types and narrow with type guards.
+- Avoid type assertions (`as Type`) unless necessary. Prefer type narrowing with `if`/`in`/`instanceof`.
+- Use `satisfies` operator to validate types without widening.
 
-## High
-- Use discriminated unions over boolean flags for state.
-- Prefer `unknown` over `any` when type is genuinely unknown — force narrowing.
-- Use `readonly` for arrays/objects that should not be mutated.
-- Use `satisfies` operator for type checking without widening.
-- Define return types explicitly on exported functions.
+## Type Safety
+- Define explicit return types on exported functions and public API methods.
+- Use discriminated unions over optional fields for variant types.
+- Prefer `interface` for object shapes that may be extended, `type` for unions and intersections.
+- Use `readonly` for properties that should not be mutated after construction.
+- Use `Record<K, V>` over `{ [key: string]: V }` for mapped types.
 
-## Style
-- Use `interface` for object shapes, `type` for unions/intersections/utilities.
-- Use `const` by default. `let` only when reassignment is needed. Never `var`.
-- Use optional chaining (`?.`) and nullish coalescing (`??`) over manual checks.
-- Prefer named exports over default exports.
+## Async Correctness
+- Always `await` promises. Unhandled promise rejections crash Node.js processes.
+- Use `Promise.all()` for concurrent operations, not sequential `await` in loops.
+- Add `.catch()` or try/catch around all async operations that can fail.
+- Never use `void` return on async functions called for their side effects — always handle the returned promise.
+- Use `AbortController` for cancellable async operations.
 
-## React (when applicable)
-- Use functional components with hooks, never class components.
-- Memoize expensive computations with `useMemo`, callbacks with `useCallback`.
-- Never put derived state in useState — compute it inline.
-- Use `key` props properly — never use array index as key for dynamic lists.
+## React Patterns (when framework detected)
+- Use functional components exclusively. No class components.
+- Memoize expensive computations with `useMemo` and callback references with `useCallback`.
+- Avoid inline object/array literals in JSX props — they cause unnecessary re-renders.
+- Use `key` prop correctly in lists — never use array index as key for dynamic lists.
+- Prefer controlled components over refs for form state.
+- Clean up side effects in `useEffect` return functions (timers, subscriptions, abort controllers).
 
-## Testing
-- Use `describe`/`it` blocks with clear test names.
-- Mock external dependencies, not internal implementation.
-- Test behavior, not implementation details.
+## Error Handling
+- Use discriminated result types (`{ ok: true; data: T } | { ok: false; error: E }`) for expected failures.
+- Use `Error` subclasses for unexpected failures. Include contextual information.
+- Never swallow errors with empty `catch {}` blocks.
+
+## Null Safety
+- Prefer `undefined` over `null` for absent values (consistent with optional chaining `?.`).
+- Use nullish coalescing `??` over logical OR `||` to avoid false-positive on `0`, `""`, `false`.
+- Use optional chaining `?.` instead of nested null checks.
+
+## Imports & Modules
+- Use ES module syntax (`import`/`export`), not CommonJS (`require`).
+- Use barrel exports (`index.ts`) sparingly — they can cause circular dependency issues and tree-shaking failures.
+- Prefer named exports over default exports for better refactoring support.
