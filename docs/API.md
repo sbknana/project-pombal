@@ -4,524 +4,477 @@
 
 - [API.md — EQUIPA](#apimd-equipa)
   - [Overview](#overview)
-  - [CLI Entry Points](#cli-entry-points)
-    - [Forge Orchestrator — `forge_orchestrator.py`](#forge-orchestrator-forge_orchestratorpy)
-    - [Forgesmith — `forgesmith.py`](#forgesmith-forgesmithpy)
-    - [Forgesmith SIMBA — `forgesmith_simba.py`](#forgesmith-simba-forgesmith_simbapy)
-    - [Forgesmith GEPA — `forgesmith_gepa.py`](#forgesmith-gepa-forgesmith_gepapy)
-    - [Forge Arena — `forge_arena.py`](#forge-arena-forge_arenapy)
+  - [CLI Interface](#cli-interface)
+    - [Entry Point](#entry-point)
+    - [Key CLI Capabilities (inferred)](#key-cli-capabilities-inferred)
+  - [Core Modules](#core-modules)
+    - [Database — `equipa/db.py`](#database-equipadbpy)
+    - [Tasks — `equipa/tasks.py`](#tasks-equipataskspy)
+    - [Dispatch — `equipa/dispatch.py`](#dispatch-equipadispatchpy)
+    - [Agent Runner — `equipa/agent_runner.py`](#agent-runner-equipaagent_runnerpy)
+    - [Lessons & Episodes — `equipa/lessons.py`](#lessons-episodes-equipalessonspy)
+    - [Parsing — `equipa/parsing.py`](#parsing-equipaparsingpy)
+    - [Monitoring — `equipa/monitoring.py`](#monitoring-equipamonitoringpy)
+    - [Security — `equipa/security.py`](#security-equipasecuritypy)
+    - [Git Operations — `equipa/git_ops.py`](#git-operations-equipagit_opspy)
+    - [Preflight — `equipa/preflight.py`](#preflight-equipapreflightpy)
+  - [Forgesmith — Self-Improvement Engine](#forgesmith-self-improvement-engine)
+    - [Core — `forgesmith.py`](#core-forgesmithpy)
+    - [SIMBA Rules — `forgesmith_simba.py`](#simba-rules-forgesmith_simbapy)
+    - [GEPA — `forgesmith_gepa.py`](#gepa-forgesmith_gepapy)
+    - [Impact Analysis — `forgesmith_impact.py`](#impact-analysis-forgesmith_impactpy)
+  - [Ollama Agent — `ollama_agent.py`](#ollama-agent-ollama_agentpy)
+    - [Sandboxed Tool Execution](#sandboxed-tool-execution)
+  - [Rubric Quality Scoring — `rubric_quality_scorer.py`](#rubric-quality-scoring-rubric_quality_scorerpy)
+    - [Scoring Dimensions (inferred)](#scoring-dimensions-inferred)
+  - [Tools](#tools)
+    - [Performance Analysis — `analyze_performance.py`](#performance-analysis-analyze_performancepy)
+    - [Forge Dashboard — `tools/forge_dashboard.py`](#forge-dashboard-toolsforge_dashboardpy)
+    - [Forge Arena — `tools/forge_arena.py`](#forge-arena-toolsforge_arenapy)
+    - [Nightly Review — `nightly_review.py`](#nightly-review-nightly_reviewpy)
     - [Database Migration — `db_migrate.py`](#database-migration-db_migratepy)
-    - [Additional Tools](#additional-tools)
-  - [Internal Python Interfaces](#internal-python-interfaces)
-    - [Agent Messaging System](#agent-messaging-system)
-    - [Agent Actions Logging](#agent-actions-logging)
-    - [Loop Detection — `LoopDetector` class](#loop-detection-loopdetector-class)
-    - [Lesson Injection System](#lesson-injection-system)
-    - [Episode Memory System](#episode-memory-system)
-    - [Lesson Sanitizer — `lesson_sanitizer.py`](#lesson-sanitizer-lesson_sanitizerpy)
-    - [Rubric Quality Scoring — `rubric_quality_scorer.py`](#rubric-quality-scoring-rubric_quality_scorerpy)
-    - [SARIF Helpers — `skills/security/static-analysis/skills/sarif-parsing/resources/sarif_helpers.py`](#sarif-helpers-skillssecuritystatic-analysisskillssarif-parsingresourcessarif_helperspy)
-    - [Ollama Agent — `ollama_agent.py`](#ollama-agent-ollama_agentpy)
-  - [Database Schema (Key Tables — Inferred)](#database-schema-key-tables-inferred)
+    - [AutoResearch — `autoresearch_loop.py`](#autoresearch-autoresearch_looppy)
+  - [SARIF Helpers — `skills/security/static-analysis/skills/sarif-parsing/resources/sarif_helpers.py`](#sarif-helpers-skillssecuritystatic-analysisskillssarif-parsingresourcessarif_helperspy)
   - [Error Handling](#error-handling)
-    - [Agent Error Classification](#agent-error-classification)
-    - [Early Termination Conditions](#early-termination-conditions)
-    - [Budget Awareness Messages (inferred)](#budget-awareness-messages-inferred)
-  - [Configuration](#configuration)
-    - [Dispatch Configuration](#dispatch-configuration)
-    - [Forgesmith Configuration](#forgesmith-configuration)
+    - [Error Classification](#error-classification)
+    - [Loop Detection](#loop-detection)
+    - [Cost Breakers](#cost-breakers)
+  - [Lesson Sanitization — `lesson_sanitizer.py`](#lesson-sanitization-lesson_sanitizerpy)
   - [Adding HTTP API Endpoints](#adding-http-api-endpoints)
+- [Example: Minimal FastAPI wrapper (not currently implemented)](#example-minimal-fastapi-wrapper-not-currently-implemented)
   - [Related Documentation](#related-documentation)
 
 ## Overview
 
-EQUIPA is a **multi-agent AI orchestration platform** built in pure Python with SQLite as its data store. It is **not a traditional REST/GraphQL/tRPC API service**. Instead, it operates as a collection of CLI tools, orchestration scripts, and internal Python function interfaces that coordinate AI agents (developers, testers, security reviewers) to execute software development tasks.
+EQUIPA is a **multi-agent AI orchestration platform** built in pure Python with zero pip dependencies. It uses SQLite as its data store and operates primarily through **CLI commands and internal function calls** rather than exposing traditional REST/GraphQL/tRPC API endpoints.
 
-**There are no HTTP API endpoints exposed by this project.**
+**There are no HTTP API endpoints detected in this project.**
 
-EQUIPA's "API" is an internal programmatic interface consisting of:
+EQUIPA's architecture is based on:
+- CLI entry points (`equipa/cli.py`)
+- Direct SQLite database operations (`equipa/db.py`)
+- Agent dispatch via subprocess/async runners (`equipa/agent_runner.py`)
+- Internal Python module interfaces
 
-- **CLI entry points** (invoked via `python script.py [args]`)
-- **SQLite database operations** (the central state store)
-- **Inter-agent messaging** (via the `agent_messages` subsystem)
-- **Internal Python function interfaces** used across modules
-
----
-
-## CLI Entry Points
-
-### Forge Orchestrator — `forge_orchestrator.py`
-
-The primary entry point for dispatching and managing agent tasks.
-
-| Command / Mode | Description |
-|---|---|
-| `python forge_orchestrator.py --task <id>` | Run a single task by ID (inferred) |
-| `python forge_orchestrator.py --dispatch` | Auto-dispatch tasks across projects based on scoring (inferred) |
-| `python forge_orchestrator.py --goals <file>` | Run parallel goals from a YAML/JSON goals file (inferred) |
-| `python forge_orchestrator.py --tasks <id,id,...>` | Run multiple tasks in parallel (inferred) |
-| `python forge_orchestrator.py --setup-repos` | Set up GitHub repos for all projects (inferred) |
-| `python forge_orchestrator.py --scan` | Scan for pending work across projects (inferred) |
-
-### Forgesmith — `forgesmith.py`
-
-The self-improvement engine that analyzes agent performance and evolves prompts/config.
-
-| Command / Mode | Description |
-|---|---|
-| `python forgesmith.py` | Run full analysis + apply changes (inferred) |
-| `python forgesmith.py --dry-run` | Analyze without applying changes (inferred) |
-| `python forgesmith.py --report` | Generate performance report only (inferred) |
-| `python forgesmith.py --rollback <run_id>` | Revert changes from a specific run (inferred) |
-| `python forgesmith.py --propose-only` | Generate O-PRO proposals without applying (inferred) |
-
-### Forgesmith SIMBA — `forgesmith_simba.py`
-
-Generates behavioral rules from high-variance agent episodes.
-
-| Command / Mode | Description |
-|---|---|
-| `python forgesmith_simba.py` | Run SIMBA rule generation pipeline (inferred) |
-| `python forgesmith_simba.py --dry-run` | Preview rules without storing (inferred) |
-| `python forgesmith_simba.py --role <role>` | Filter to a specific agent role (inferred) |
-
-### Forgesmith GEPA — `forgesmith_gepa.py`
-
-Genetic/evolutionary prompt optimization for agent roles.
-
-| Command / Mode | Description |
-|---|---|
-| `python forgesmith_gepa.py` | Run GEPA prompt evolution (inferred) |
-| `python forgesmith_gepa.py --dry-run` | Preview evolved prompts without deploying (inferred) |
-| `python forgesmith_gepa.py --role <role>` | Evolve prompts for a specific role (inferred) |
-
-### Forge Arena — `forge_arena.py`
-
-Multi-phase testing arena for agent evaluation.
-
-| Command / Mode | Description |
-|---|---|
-| `python forge_arena.py` | Run arena evaluation phases (inferred) |
-| `python forge_arena.py --dry-run` | Simulate without dispatching tasks (inferred) |
-| `python forge_arena.py --export-lora` | Export training data for LoRA fine-tuning (inferred) |
-
-### Database Migration — `db_migrate.py`
-
-Schema migration tool for the SQLite database.
-
-| Command / Mode | Description |
-|---|---|
-| `python db_migrate.py` | Run all pending migrations |
-| `python db_migrate.py --silent` | Run migrations without output (inferred) |
-
-### Additional Tools
-
-| Script | Description |
-|---|---|
-| `equipa_setup.py` | Interactive setup wizard for new installations |
-| `forge_dashboard.py` | Terminal dashboard for task/project status |
-| `analyze_performance.py` | Performance analytics and reporting |
-| `nightly_review.py` | Automated nightly portfolio review |
-| `autoresearch_loop.py` | Automated prompt optimization loop |
-| `autoresearch_prompts.py` | O-PRO prompt research and mutation |
-| `forgesmith_backfill.py` | Backfill episode data from agent logs |
-| `forgesmith_impact.py` | Impact assessment for configuration changes |
-| `ingest_training_results.py` | Ingest fine-tuning results into the database |
-| `prepare_training_data.py` | Prepare conversation data for model training |
-| `train_qlora.py` | QLoRA training script |
-| `train_qlora_peft.py` | QLoRA training with PEFT |
-| `ollama_agent.py` | Local Ollama-based agent with sandboxed tool execution |
-| `benchmark_migrations.py` | Benchmark and verify database migrations |
+The sections below document the **programmatic interfaces** available for integration, organized by module.
 
 ---
 
-## Internal Python Interfaces
+## CLI Interface
 
-### Agent Messaging System
+The primary user-facing interface is the CLI defined in `equipa/cli.py`.
 
-The inter-agent communication layer used by the orchestrator for multi-agent coordination.
+### Entry Point
 
-#### `post_agent_message(task_id, cycle, from_role, to_role, msg_type, content)`
-
-Post a message from one agent role to another.
-
-| Parameter | Type | Description |
-|---|---|---|
-| `task_id` | `int` | The task this message relates to |
-| `cycle` | `int` | The dev-test cycle number |
-| `from_role` | `str` | Sending role (e.g., `"developer"`, `"tester"`) |
-| `to_role` | `str` | Receiving role |
-| `msg_type` | `str` | Message type (e.g., `"test_results"`, `"feedback"`) |
-| `content` | `str` | Message content (JSON or plain text) |
-
-#### `read_agent_messages(task_id, to_role, max_cycle)`
-
-Read unread messages for a given role.
-
-| Parameter | Type | Description |
-|---|---|---|
-| `task_id` | `int` | The task to read messages for |
-| `to_role` | `str` | The role receiving messages |
-| `max_cycle` | `int` | Maximum cycle number to include |
-
-**Returns:** `list[dict]` — List of message records ordered by cycle and ID.
-
-#### `mark_messages_read(task_id, to_role, cycle_number)`
-
-Mark messages as read up to the given cycle.
-
-| Parameter | Type | Description |
-|---|---|---|
-| `task_id` | `int` | The task ID |
-| `to_role` | `str` | The role whose messages to mark read |
-| `cycle_number` | `int` | Mark all messages up to this cycle |
-
-#### `format_messages_for_prompt(messages)`
-
-Format message records into a string suitable for injection into agent system prompts.
-
-| Parameter | Type | Description |
-|---|---|---|
-| `messages` | `list[dict]` | Messages from `read_agent_messages()` |
-
-**Returns:** `str` — Formatted messages block, or empty string if no messages.
-
----
-
-### Agent Actions Logging
-
-#### `classify_error(error_text)`
-
-Classify an error string into a known category.
-
-| Parameter | Type | Description |
-|---|---|---|
-| `error_text` | `str` | Raw error output text |
-
-**Returns:** `str` — One of: `"timeout"`, `"file_not_found"`, `"permission"`, `"syntax"`, `"import"`, `"test_failure"`, `"unknown"`, or `""` for empty input.
-
-#### `bulk_log_agent_actions(action_log, task_id, run_id, cycle, role)`
-
-Batch-insert agent action records. Never raises exceptions.
-
-| Parameter | Type | Description |
-|---|---|---|
-| `action_log` | `list` | List of action records |
-| `task_id` | `int` | Associated task |
-| `run_id` | `str` | Run identifier |
-| `cycle` | `int` | Cycle number |
-| `role` | `str` | Agent role |
-
----
-
-### Loop Detection — `LoopDetector` class
-
-Detects when agents are stuck in repetitive loops.
-
-#### `LoopDetector(warn_threshold=3, terminate_threshold=5)` (inferred)
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `warn_threshold` | `int` | `3` (inferred) | Consecutive identical fingerprints before warning |
-| `terminate_threshold` | `int` | `5` (inferred) | Consecutive identical fingerprints before termination |
-
-#### `record(result)` → `str`
-
-Record a tool result and return loop status.
-
-**Returns:** One of `"ok"`, `"warn"`, or `"terminate"`.
-
-#### `warning_message()` → `str`
-
-Human-readable warning message when a loop is detected.
-
-#### `termination_summary()` → `str`
-
-Human-readable summary when a loop triggers termination.
-
----
-
-### Lesson Injection System
-
-#### `get_relevant_lessons(role, error_type, limit)` — `forgesmith.py`
-
-Retrieve lessons learned from past agent runs.
-
-| Parameter | Type | Description |
-|---|---|---|
-| `role` | `str` | Agent role to filter lessons for |
-| `error_type` | `str` | Error category to match (optional) |
-| `limit` | `int` | Maximum number of lessons to return |
-
-**Returns:** `list[dict]` — Relevant lessons sorted by relevance.
-
-#### `format_lessons_for_injection(lessons)` — `forge_orchestrator.py`
-
-Format lessons into a prompt-injectable string wrapped in `<task_input>` tags.
-
-| Parameter | Type | Description |
-|---|---|---|
-| `lessons` | `list[dict]` | Lessons from `get_relevant_lessons()` |
-
-**Returns:** `str` — Sanitized, formatted lessons text.
-
----
-
-### Episode Memory System
-
-#### `format_episodes_for_injection(episodes)` — `forge_orchestrator.py`
-
-Format past agent episodes for injection into agent context.
-
-| Parameter | Type | Description |
-|---|---|---|
-| `episodes` | `list[dict]` | Episode records from the database |
-
-**Returns:** `str` — Formatted episode context.
-
-#### `update_episode_q_values(injected_episode_ids, task_succeeded)` — `forge_orchestrator.py`
-
-Update Q-values for episodes that were injected into a task's context, based on whether the task succeeded.
-
-| Parameter | Type | Description |
-|---|---|---|
-| `injected_episode_ids` | `list[int]` | IDs of episodes that were injected |
-| `task_succeeded` | `bool` | Whether the task using these episodes succeeded |
-
----
-
-### Lesson Sanitizer — `lesson_sanitizer.py`
-
-Security layer that sanitizes lessons before injection into agent prompts.
-
-#### `sanitize_lesson_content(text)` → `str`
-
-Strips XML injection tags, role override phrases, base64 payloads, ANSI escapes, dangerous code blocks, and enforces length limits.
-
-#### `validate_lesson_structure(text)` → `bool`
-
-Returns `True` if the lesson text has a valid structure for injection.
-
-#### `wrap_lessons_in_task_input(lessons_text)` → `str`
-
-Wraps sanitized lessons in `<task_input>` tags for safe prompt injection.
-
----
-
-### Rubric Quality Scoring — `rubric_quality_scorer.py`
-
-#### `score_agent_output(result_text, files_changed, role)` → `dict`
-
-Score agent output across five quality dimensions.
-
-| Parameter | Type | Description |
-|---|---|---|
-| `result_text` | `str` | Raw agent output text |
-| `files_changed` | `list[str]` | List of files modified by the agent |
-| `role` | `str` | Agent role (`"developer"`, `"tester"`, `"security_reviewer"`) |
-
-**Returns:**
-
-```json
-{
-  "total_score": 35,
-  "normalized_score": 0.7,
-  "max_possible": 50,
-  "dimensions": {
-    "naming_consistency": 7,
-    "code_structure": 8,
-    "test_coverage": 6,
-    "documentation": 7,
-    "error_handling": 7
-  },
-  "details": {
-    "matched_patterns": ["..."]
-  }
-}
+```bash
+python -m equipa.cli
 ```
 
-**(inferred)** All five dimensions score 0–10, max possible is 50.
+The CLI calls `async_main()` internally, which handles argument parsing and dispatches work.
+
+### Key CLI Capabilities (inferred)
+
+| Command / Mode | Description |
+|---|---|
+| Auto-dispatch | Scans pending work, scores projects, and dispatches agents automatically |
+| Parallel goals | Runs multiple goals concurrently from a goals file |
+| Parallel tasks | Dispatches specific task IDs in parallel |
+| Single task | Runs a single task by ID |
 
 ---
 
-### SARIF Helpers — `skills/security/static-analysis/skills/sarif-parsing/resources/sarif_helpers.py`
+## Core Modules
 
-Utility library for parsing and analyzing SARIF (Static Analysis Results Interchange Format) files.
+### Database — `equipa/db.py`
+
+All state is stored in SQLite (30+ table schema).
+
+| Function | Description | Parameters |
+|---|---|---|
+| `get_db_connection(write)` | Returns a SQLite connection | `write: bool` — whether to open in write mode |
+| `ensure_schema()` | Creates/verifies all required tables | None |
+| `classify_error(error_text)` | Categorizes an error string into a known class | `error_text: str` — raw error output |
+
+### Tasks — `equipa/tasks.py`
+
+| Function | Description | Parameters | Returns |
+|---|---|---|---|
+| `fetch_task(task_id)` | Retrieves a single task by ID | `task_id: int` | Task dict (inferred) |
+| `fetch_next_todo(project_id)` | Gets the next pending task for a project | `project_id: int` | Task dict or None (inferred) |
+| `fetch_project_context(project_id)` | Returns context/state for a project | `project_id: int` | Context dict (inferred) |
+| `fetch_project_info(project_id)` | Returns project metadata | `project_id: int` | Project dict (inferred) |
+| `fetch_tasks_by_ids(task_ids)` | Bulk-fetches tasks | `task_ids: list[int]` | List of task dicts (inferred) |
+| `get_task_complexity(task)` | Determines complexity rating of a task | `task: dict` | Complexity string/int (inferred) |
+| `verify_task_updated(task_id)` | Confirms a task was modified in the DB | `task_id: int` | `bool` (inferred) |
+| `resolve_project_dir(task)` | Determines the filesystem path for a task's project | `task: dict` | `str` — directory path (inferred) |
+
+### Dispatch — `equipa/dispatch.py`
+
+| Function | Description | Parameters |
+|---|---|---|
+| `load_dispatch_config(filepath)` | Loads dispatch configuration from a JSON/YAML file | `filepath: str` |
+| `scan_pending_work()` | Queries DB for all actionable tasks | None |
+| `score_project(summary, config)` | Scores a project for dispatch priority | `summary: dict`, `config: dict` |
+| `apply_dispatch_filters(work, config, args)` | Filters work items based on config rules and CLI args | `work: list`, `config: dict`, `args` |
+| `is_feature_enabled(dispatch_config, feature_name)` | Checks if a feature flag is enabled | `dispatch_config: dict`, `feature_name: str` |
+| `run_auto_dispatch(scored, config, args)` | *(async)* Dispatches agents for scored work items | `scored: list`, `config: dict`, `args` |
+| `load_goals_file(filepath)` | Loads a goals definition file | `filepath: str` |
+| `validate_goals(goals)` | Validates goal structure | `goals: list` |
+| `run_parallel_goals(resolved_goals, defaults, args)` | *(async)* Executes multiple goals concurrently | `resolved_goals: list`, `defaults: dict`, `args` |
+| `parse_task_ids(task_str)` | Parses comma-separated task IDs | `task_str: str` |
+| `run_parallel_tasks(task_ids, args)` | *(async)* Dispatches specific tasks in parallel | `task_ids: list[int]`, `args` |
+
+### Agent Runner — `equipa/agent_runner.py`
+
+| Function | Description | Parameters |
+|---|---|---|
+| `run_agent(cmd, timeout)` | *(async)* Executes an agent subprocess with a timeout | `cmd: str`, `timeout: int` |
+
+### Lessons & Episodes — `equipa/lessons.py`
+
+| Function | Description | Parameters |
+|---|---|---|
+| `update_lesson_injection_count(lesson_ids)` | Increments injection counter for used lessons | `lesson_ids: list[int]` |
+| `get_active_simba_rules()` | Retrieves active SIMBA rules for injection | None |
+| `update_episode_injection_count(episode_ids)` | Increments injection counter for used episodes | `episode_ids: list[int]` |
+
+### Parsing — `equipa/parsing.py`
+
+| Function | Description | Parameters | Returns |
+|---|---|---|---|
+| `estimate_tokens(text)` | Estimates token count for a text string | `text: str` | `int` (inferred) |
+| `compute_keyword_overlap(text_a, text_b)` | Computes keyword similarity between two texts | `text_a: str`, `text_b: str` | `float` (inferred) |
+| `deduplicate_lessons(lessons)` | Removes duplicate lessons by content similarity | `lessons: list` | `list` |
+| `compact_agent_output(raw_output, max_words)` | Truncates/summarizes agent output | `raw_output: str`, `max_words: int` | `str` |
+| `parse_reflection(result_text)` | Extracts reflection/learning from agent output | `result_text: str` | `dict` (inferred) |
+| `parse_approach_summary(result_text)` | Extracts approach description from agent output | `result_text: str` | `str` (inferred) |
+| `compute_initial_q_value(outcome)` | Computes Q-value for RL-style episode tracking | `outcome` | `float` (inferred) |
+| `parse_tester_output(result_text)` | Parses tester agent structured output | `result_text: str` | `dict` (inferred) |
+| `parse_developer_output(result_text)` | Parses developer agent structured output | `result_text: str` | `dict` (inferred) |
+| `build_test_failure_context(test_results, cycle)` | Builds context for retry after test failure | `test_results: dict`, `cycle: int` | `str` (inferred) |
+| `validate_output(result)` | Validates agent output structure | `result` | `bool` (inferred) |
+
+### Monitoring — `equipa/monitoring.py`
+
+#### `LoopDetector` class
+
+Detects when agents are stuck in loops.
+
+| Method | Description | Parameters |
+|---|---|---|
+| `_fingerprint(...)` | Creates a hash fingerprint of agent state | Internal |
+| `_get_files_changed(...)` | Detects file changes between iterations | Internal |
+| `record(...)` | Records an iteration for loop detection | Agent state data |
+| `warning_message(...)` | Generates a warning message for near-loop states | None |
+| `termination_summary(...)` | Generates termination explanation | None |
+
+| Function | Description | Parameters |
+|---|---|---|
+| `calculate_dynamic_budget(max_turns)` | Computes dynamic budget thresholds for turn-based warnings | `max_turns: int` |
+
+### Security — `equipa/security.py`
+
+| Function | Description | Parameters | Returns |
+|---|---|---|---|
+| `wrap_untrusted(content, delimiter)` | Wraps untrusted content in safe delimiters | `content: str`, `delimiter: str` | `str` |
+| `generate_skill_manifest()` | Generates SHA256 manifest of skill/prompt files | None | `dict` |
+| `write_skill_manifest()` | Writes manifest to disk | None | None |
+| `verify_skill_integrity()` | Verifies skill files against stored manifest | None | `bool` (inferred) |
+
+### Git Operations — `equipa/git_ops.py`
+
+| Function | Description | Parameters |
+|---|---|---|
+| `detect_project_language(project_dir)` | Detects programming languages and frameworks in a project | `project_dir: str` |
+| `check_gh_installed()` | Checks if GitHub CLI is available | None |
+| `setup_all_repos(args)` | Sets up/clones all project repositories | `args` |
+
+### Preflight — `equipa/preflight.py`
+
+| Function | Description | Parameters |
+|---|---|---|
+| `auto_install_dependencies(project_dir, output)` | *(async)* Detects and installs project dependencies before agent runs | `project_dir: str`, `output` |
+
+---
+
+## Forgesmith — Self-Improvement Engine
+
+Forgesmith is EQUIPA's meta-learning system that analyzes agent performance and evolves prompts, configs, and rules.
+
+### Core — `forgesmith.py`
+
+```bash
+python forgesmith.py [--dry-run] [--report] [--rollback RUN_ID] [--propose-only]
+```
+
+| Mode | Description |
+|---|---|
+| `--dry-run` | Analyze and propose changes without applying |
+| `--report` | Generate performance report only |
+| `--rollback RUN_ID` | Revert changes from a specific Forgesmith run |
+| `--propose-only` | Generate OPRO proposals without applying |
 
 #### Key Functions
 
-| Function | Description |
-|---|---|
-| `load_sarif(path)` | Load a SARIF file from disk |
-| `save_sarif(sarif, path, indent)` | Write SARIF data to disk |
-| `extract_findings(sarif)` | Extract all findings as `Finding` objects |
-| `filter_by_level(findings, *levels)` | Filter findings by severity level |
-| `filter_by_file(findings, pattern)` | Filter findings by file path pattern |
-| `filter_by_rule(findings, *rule_ids)` | Filter findings by rule ID |
-| `group_by_file(findings)` | Group findings by file path |
-| `group_by_rule(findings)` | Group findings by rule ID |
-| `deduplicate(findings)` | Remove duplicate findings by fingerprint |
-| `merge_sarif_files(*paths)` | Merge multiple SARIF files into one |
-| `summary(findings)` | Generate a summary string of findings |
-| `to_csv_rows(findings)` | Convert findings to CSV-compatible rows |
-
----
-
-### Ollama Agent — `ollama_agent.py`
-
-Local agent interface for Ollama-hosted models with sandboxed tool execution.
-
-#### `ollama_chat(base_url, model, messages, tools, timeout)`
-
-Send a chat completion request to a local Ollama instance.
-
-| Parameter | Type | Description |
+| Function | Description | Parameters |
 |---|---|---|
-| `base_url` | `str` | Ollama server URL (e.g., `http://localhost:11434`) |
-| `model` | `str` | Model name (e.g., `qwen2.5-coder:32b`) |
-| `messages` | `list[dict]` | Conversation messages |
-| `tools` | `list[dict]` | Tool definitions |
-| `timeout` | `int` | Request timeout in seconds |
+| `collect_agent_runs(cfg)` | Gathers recent agent run data | `cfg: dict` |
+| `extract_lessons(runs, cfg)` | Extracts lessons from agent runs | `runs: list`, `cfg: dict` |
+| `get_relevant_lessons(role, error_type, limit)` | Retrieves lessons filtered by role and error type | `role: str`, `error_type: str`, `limit: int` |
+| `analyze_max_turns_hit(runs, cfg)` | Finds tasks that exhausted their turn budget | `runs: list`, `cfg: dict` |
+| `analyze_repeat_errors(runs, cfg)` | Identifies recurring error patterns | `runs: list`, `cfg: dict` |
+| `run_analysis(cfg)` | Runs all analysis passes | `cfg: dict` |
+| `apply_changes(findings, run_id, cfg, dry_run)` | Applies recommended changes | `findings: list`, `run_id: str`, `cfg: dict`, `dry_run: bool` |
+| `rollback_change(change)` | Reverts a single applied change | `change: dict` |
+| `compute_rubric_score(run, cfg)` | Scores a run against quality rubric | `run: dict`, `cfg: dict` |
+| `evolve_rubric_weights(cfg)` | Evolves rubric scoring weights based on outcomes | `cfg: dict` |
+| `generate_opro_proposals(runs, cfg, dry_run)` | Generates prompt optimization proposals via OPRO | `runs: list`, `cfg: dict`, `dry_run: bool` |
 
-#### `check_ollama_health(base_url)` → `bool`
+### SIMBA Rules — `forgesmith_simba.py`
 
-Check if the Ollama server is reachable.
+Self-Improving Meta-Behavioral Adaptation. Generates targeted rules from success/failure patterns.
 
-#### `list_ollama_models(base_url)` → `list`
+```bash
+python forgesmith_simba.py [--dry-run] [--role ROLE]
+```
 
-List available models on the Ollama server.
+| Function | Description | Parameters |
+|---|---|---|
+| `find_high_variance_episodes(lookback_days)` | Finds episodes with inconsistent outcomes | `lookback_days: int` |
+| `find_hardest_cases(lookback_days)` | Identifies consistently failing task types | `lookback_days: int` |
+| `build_simba_prompt(role, successes, failures, hardest_cases, existing_rules)` | Constructs LLM prompt for rule generation | Multiple |
+| `validate_rule(rule, existing_rules)` | Validates a proposed rule against constraints | `rule: dict`, `existing_rules: list` |
+| `store_rules(role, rules, dry_run)` | Persists validated rules to DB | `role: str`, `rules: list`, `dry_run: bool` |
+| `evaluate_simba_rules()` | Evaluates rule effectiveness | None |
+| `prune_stale_rules(dry_run)` | Removes ineffective rules | `dry_run: bool` |
 
-#### Sandboxed Tool Execution
+### GEPA — `forgesmith_gepa.py`
 
-| Function | Description |
-|---|---|
-| `exec_read_file(project_dir, args)` | Read a file within the project sandbox |
-| `exec_list_directory(project_dir, args)` | List directory contents |
-| `exec_search_files(project_dir, args)` | Search for files by name |
-| `exec_grep(project_dir, args)` | Search file contents |
-| `exec_bash(project_dir, args, allow_write)` | Execute bash commands (with write protection) |
-| `exec_write_file(project_dir, args)` | Write a file (sandboxed) |
-| `exec_edit_file(project_dir, args)` | Edit a file (sandboxed) |
+Guided Evolutionary Prompt Adaptation. Evolves system prompts using DSPy-style optimization.
 
-All file operations are sandboxed via `safe_path()` which prevents directory traversal. Write commands are validated via `is_blocked_command()`.
+```bash
+python forgesmith_gepa.py [--dry-run] [--role ROLE]
+```
+
+| Function | Description | Parameters |
+|---|---|---|
+| `collect_episodes_for_role(role, lookback_days)` | Gathers training episodes for a role | `role: str`, `lookback_days: int` |
+| `validate_evolved_prompt(current_prompt, evolved_prompt)` | Validates a proposed prompt evolution | `current_prompt: str`, `evolved_prompt: str` |
+| `get_ab_prompt_for_role(role)` | Gets the A/B test variant prompt | `role: str` |
+| `rollback_evolved_prompt(role, version)` | Reverts to a previous prompt version | `role: str`, `version: int` |
+| `get_ab_test_status(role)` | Returns current A/B test status for a role | `role: str` |
+
+### Impact Analysis — `forgesmith_impact.py`
+
+| Function | Description | Parameters |
+|---|---|---|
+| `identify_affected_roles(change_type, target_file, old_value, new_value)` | Determines which roles are affected by a change | Multiple |
+| `compute_blast_radius(affected_roles)` | Estimates the scope of a change's impact | `affected_roles: list` |
+| `assess_risk_level(change_type, affected_roles, blast_radius, diff_ratio)` | Assigns risk level to a proposed change | Multiple |
 
 ---
 
-## Database Schema (Key Tables — Inferred)
+## Ollama Agent — `ollama_agent.py`
 
-The SQLite database (30+ tables) serves as the central state store. Key tables include:
+Local LLM agent interface for running tasks via Ollama.
 
-| Table | Purpose (inferred) |
+| Function | Description | Parameters |
+|---|---|---|
+| `ollama_chat(base_url, model, messages, tools, timeout)` | Sends a chat request to Ollama API | `base_url: str`, `model: str`, `messages: list`, `tools: list`, `timeout: int` |
+| `check_ollama_health(base_url)` | Health check for Ollama server | `base_url: str` |
+| `list_ollama_models(base_url)` | Lists available Ollama models | `base_url: str` |
+
+### Sandboxed Tool Execution
+
+| Function | Description | Parameters |
+|---|---|---|
+| `safe_path(project_dir, relative_path)` | Validates and resolves a path within the project sandbox | `project_dir: str`, `relative_path: str` |
+| `is_safe_read_command(command)` | Checks if a shell command is read-only | `command: str` |
+| `is_blocked_command(command)` | Checks if a shell command is forbidden | `command: str` |
+| `exec_read_file(project_dir, args)` | Reads a file within the sandbox | `project_dir: str`, `args: dict` |
+| `exec_list_directory(project_dir, args)` | Lists directory contents within the sandbox | `project_dir: str`, `args: dict` |
+| `exec_search_files(project_dir, args)` | Searches for files by pattern | `project_dir: str`, `args: dict` |
+| `exec_grep(project_dir, args)` | Greps file contents | `project_dir: str`, `args: dict` |
+| `exec_bash(project_dir, args, allow_write)` | Executes a bash command (sandboxed) | `project_dir: str`, `args: dict`, `allow_write: bool` |
+| `exec_write_file(project_dir, args)` | Writes a file within the sandbox | `project_dir: str`, `args: dict` |
+| `exec_edit_file(project_dir, args)` | Edits a file within the sandbox | `project_dir: str`, `args: dict` |
+
+---
+
+## Rubric Quality Scoring — `rubric_quality_scorer.py`
+
+| Function | Description | Parameters | Returns |
+|---|---|---|---|
+| `score_agent_output(result_text, files_changed, role)` | Scores agent output across 5 quality dimensions | `result_text: str`, `files_changed: list`, `role: str` | `dict` with `dimensions`, `total`, `normalized`, `details` (inferred) |
+
+### Scoring Dimensions (inferred)
+
+| Dimension | Description |
 |---|---|
-| `tasks` | Task definitions, status, assignments |
-| `projects` | Project metadata and configuration |
-| `agent_episodes` | Historical agent run data with Q-values |
-| `agent_lessons` | Lessons learned from past runs |
-| `agent_messages` | Inter-agent communication messages |
-| `agent_actions` | Logged agent tool invocations |
-| `rubric_scores` | Quality scores for agent outputs |
-| `simba_rules` | SIMBA-generated behavioral rules |
-| `forgesmith_changes` | Configuration change history |
-| `forgesmith_runs` | Forgesmith analysis run logs |
-| `schema_migrations` | Database migration tracking |
-| `prompt_versions` | Prompt evolution history (inferred) |
+| Naming consistency | Quality of identifiers and naming conventions |
+| Code structure | Organization and architecture quality |
+| Test coverage | Presence and quality of tests |
+| Documentation | Inline and external documentation |
+| Error handling | Robustness of error handling patterns |
 
-Database migrations are managed by `db_migrate.py` and progress through versions v0 → v1 → v2 → v3 → v4.
+---
+
+## Tools
+
+### Performance Analysis — `analyze_performance.py`
+
+```bash
+python analyze_performance.py [--project PROJECT_ID] [--days N]
+```
+
+Generates comprehensive performance reports from task history and checkpoint data.
+
+### Forge Dashboard — `tools/forge_dashboard.py`
+
+```bash
+python tools/forge_dashboard.py
+```
+
+Terminal dashboard showing task summaries, throughput, blocked tasks, and session activity.
+
+### Forge Arena — `tools/forge_arena.py`
+
+```bash
+python tools/forge_arena.py [--dry-run]
+```
+
+Automated testing arena that creates tasks, dispatches agents, checks convergence, and exports LoRA training data.
+
+### Nightly Review — `nightly_review.py`
+
+```bash
+python nightly_review.py [--db PATH]
+```
+
+Generates a nightly portfolio review including accomplishments, blockers, stale projects, agent stats, and upcoming reminders.
+
+### Database Migration — `db_migrate.py`
+
+```bash
+python db_migrate.py [--db PATH]
+```
+
+Runs incremental schema migrations (v0 → v1 → v2 → v3 → v4) with automatic backup.
+
+### AutoResearch — `autoresearch_loop.py`
+
+```bash
+python autoresearch_loop.py [--role ROLE] [--target PCT] [--max-rounds N] [--status]
+```
+
+Automated prompt optimization loop: mutate → deploy → test → evaluate → iterate.
+
+---
+
+## SARIF Helpers — `skills/security/static-analysis/skills/sarif-parsing/resources/sarif_helpers.py`
+
+Utility library for parsing SARIF (Static Analysis Results Interchange Format) files.
+
+| Function | Description | Parameters | Returns |
+|---|---|---|---|
+| `load_sarif(path)` | Loads a SARIF file | `path: str` | `dict` |
+| `save_sarif(sarif, path, indent)` | Writes SARIF to disk | `sarif: dict`, `path: str`, `indent: int` | None |
+| `extract_findings(sarif)` | Extracts all findings from SARIF data | `sarif: dict` | `list[Finding]` |
+| `filter_by_level(findings, *levels)` | Filters findings by severity level | `findings: list`, `*levels: str` | `list[Finding]` |
+| `filter_by_file(findings, pattern)` | Filters findings by file path pattern | `findings: list`, `pattern: str` | `list[Finding]` |
+| `filter_by_rule(findings, *rule_ids)` | Filters findings by rule ID | `findings: list`, `*rule_ids: str` | `list[Finding]` |
+| `group_by_file(findings)` | Groups findings by source file | `findings: list` | `dict` |
+| `group_by_rule(findings)` | Groups findings by rule ID | `findings: list` | `dict` |
+| `deduplicate(findings)` | Removes duplicate findings | `findings: list` | `list[Finding]` |
+| `merge_sarif_files(*paths)` | Merges multiple SARIF files | `*paths: str` | `dict` |
+| `summary(findings)` | Generates a human-readable summary | `findings: list` | `str` (inferred) |
 
 ---
 
 ## Error Handling
 
-### Agent Error Classification
+### Error Classification
 
-Errors from agent runs are classified into categories:
+EQUIPA classifies errors into known categories via `classify_error()`:
 
-| Category | Pattern (inferred) |
+| Error Class | Detection Pattern (inferred) |
 |---|---|
-| `timeout` | Command exceeded time limit |
-| `file_not_found` | Referenced file does not exist |
+| `timeout` | Process timeout exceeded |
+| `file_not_found` | File/path not found errors |
 | `permission` | Permission denied errors |
-| `syntax` | Syntax errors in generated code |
-| `import` | Missing module/import errors |
-| `test_failure` | Test assertions failed |
-| `unknown` | Unclassifiable errors |
+| `syntax` | Syntax errors in code |
+| `import` | Import/module not found errors |
+| `test_failure` | Test assertion failures |
+| `unknown` | Unclassified errors |
 
-### Early Termination Conditions
+### Loop Detection
 
-The orchestrator terminates agent runs when:
+The `LoopDetector` class prevents agents from spinning indefinitely:
 
-| Condition | Behavior |
+| Threshold | Behavior |
 |---|---|
-| **Consecutive loop** | Same tool fingerprint repeated N times → warn then terminate |
-| **Alternating pattern** | Two-tool alternation detected at 6 cycles → terminate |
-| **Monologue detection** | 3+ consecutive text-only responses (no tool use) → terminate |
-| **Stuck phrases** | Known stuck phrases detected in output (case-insensitive) |
-| **Cost breaker** | Cumulative cost exceeds limit (scales with complexity) |
-| **Budget exhaustion** | Turn count exceeds max_turns with periodic warnings |
+| Warning threshold (configurable) | Injects a warning message into agent context |
+| Termination threshold (configurable) | Kills the agent and records termination |
 
-### Budget Awareness Messages (inferred)
+Loop detection monitors:
+- Repeated identical fingerprints (same output hash)
+- Alternating patterns (A→B→A→B cycles)
+- Monologue detection (consecutive text-only responses without tool use)
+- Tool call loops (same tool called repeatedly with same args)
 
-| Trigger | Message Type |
-|---|---|
-| Periodic interval | Remaining turns notification |
-| 50% turns used | Halfway warning |
-| ~80%+ turns used | Critical warning |
+### Cost Breakers
+
+Tasks are terminated if estimated cost exceeds configured limits. Cost limits scale with task complexity (inferred).
 
 ---
 
-## Configuration
+## Lesson Sanitization — `lesson_sanitizer.py`
 
-### Dispatch Configuration
+Security layer for injected lesson content:
 
-Loaded via `load_dispatch_config(filepath)`. Controls:
-
-- Per-role model selection
-- Per-role turn limits
-- Provider selection (Claude API vs Ollama)
-- Task type routing and prompts
-- Cost limits per complexity tier
-- Concurrency settings
-
-### Forgesmith Configuration
-
-Loaded via `load_config()`. Controls:
-
-- Lookback windows for analysis
-- Thresholds for change proposals
-- Rubric definitions and weights
-- SIMBA/GEPA parameters
-- Backup retention settings
+| Threat | Mitigation |
+|---|---|
+| XML injection tags | Stripped |
+| Role override phrases | Stripped |
+| Base64 payloads | Stripped |
+| ANSI escape sequences | Stripped |
+| Dangerous code blocks | Stripped |
+| Excessive length | Capped to max length |
 
 ---
 
 ## Adding HTTP API Endpoints
 
-This project currently has **no HTTP API endpoints**. If you need to expose EQUIPA's functionality via a web API, consider:
+EQUIPA currently operates as a CLI tool with direct database access. To expose an HTTP API, consider:
 
-1. **FastAPI wrapper**: Create a `forge_api.py` that wraps the orchestrator and database functions:
-   ```python
-   from fastapi import FastAPI
-   app = FastAPI()
-   
-   @app.get("/tasks/{task_id}")
-   async def get_task(task_id: int):
-       return fetch_task(task_id)
-   
-   @app.post("/tasks/{task_id}/dispatch")
-   async def dispatch_task(task_id: int):
-       # Trigger orchestrator for this task
-       ...
-   ```
+1. **FastAPI wrapper** — Add a `equipa/api.py` using FastAPI (would require adding a dependency) to expose task management, dispatch, and monitoring endpoints
+2. **MCP Server** — The project references MCP config generation (`step_generate_mcp_config`), suggesting Model Context Protocol integration is supported
+3. **SQLite over HTTP** — Use a tool like `datasette` to expose read-only database queries
 
-2. **MCP Server**: The project already generates MCP configuration via `step_generate_mcp_config()` in `equipa_setup.py`, suggesting Model Context Protocol integration is a supported pattern.
+```python
+# Example: Minimal FastAPI wrapper (not currently implemented)
+from fastapi import FastAPI
+from equipa.tasks import fetch_task, fetch_next_todo
+from equipa.dispatch import scan_pending_work
 
-3. **SQLite direct access**: For read-only dashboards, query the SQLite database directly using the schema documented above.
+app = FastAPI()
+
+@app.get("/tasks/{task_id}")
+def get_task(task_id: int):
+    return fetch_task(task_id)
+
+@app.get("/projects/{project_id}/next")
+def next_task(project_id: int):
+    return fetch_next_todo(project_id)
+
+@app.get("/dispatch/pending")
+def pending_work():
+    return scan_pending_work()
+```
 ---
 
 ## Related Documentation
 
-- [Readme](README.md)
 - [Architecture](ARCHITECTURE.md)
 - [Deployment](DEPLOYMENT.md)
 - [Contributing](CONTRIBUTING.md)
-

@@ -3,133 +3,115 @@
 ## Table of Contents
 
 - [Contributing to EQUIPA](#contributing-to-equipa)
-  - [Welcome](#welcome)
   - [Development Setup](#development-setup)
     - [Prerequisites](#prerequisites)
-    - [Getting Started](#getting-started)
-    - [Zero Dependencies Policy](#zero-dependencies-policy)
+    - [Local Setup](#local-setup)
+    - [Project Structure](#project-structure)
   - [Code Style](#code-style)
-    - [General Conventions](#general-conventions)
-    - [Naming Conventions](#naming-conventions)
-    - [Code Patterns to Follow](#code-patterns-to-follow)
-    - [Documentation](#documentation)
+    - [Security Conventions](#security-conventions)
   - [Making Changes](#making-changes)
     - [Branch Naming](#branch-naming)
     - [Commit Messages](#commit-messages)
-    - [Key Architectural Considerations](#key-architectural-considerations)
+    - [Development Workflow](#development-workflow)
   - [Testing](#testing)
-    - [Running Tests](#running-tests)
-- [Core orchestration tests](#core-orchestration-tests)
-- [Agent communication tests](#agent-communication-tests)
-- [Learning system tests](#learning-system-tests)
-- [Quality and scoring tests](#quality-and-scoring-tests)
-- [Routing and dispatch tests](#routing-and-dispatch-tests)
-- [Monologue detection tests](#monologue-detection-tests)
-- [Forgesmith self-improvement tests](#forgesmith-self-improvement-tests)
-- [Database migration benchmarks](#database-migration-benchmarks)
+    - [Running All Tests](#running-all-tests)
+    - [Running Specific Test Files](#running-specific-test-files)
+- [Early termination logic](#early-termination-logic)
+- [Loop detection](#loop-detection)
+- [Agent message passing](#agent-message-passing)
+- [Forgesmith SIMBA rules](#forgesmith-simba-rules)
+- [Rubric quality scoring](#rubric-quality-scoring)
+- [Lesson sanitizer](#lesson-sanitizer)
+- [Episode injection](#episode-injection)
+    - [Running Benchmarks](#running-benchmarks)
     - [What to Test](#what-to-test)
-    - [Testing Conventions](#testing-conventions)
+    - [Test Conventions](#test-conventions)
   - [Pull Request Process](#pull-request-process)
     - [Before Submitting](#before-submitting)
-    - [PR Description](#pr-description)
+    - [PR Description Template](#pr-description-template)
+  - [What](#what)
+  - [Why](#why)
+  - [How](#how)
+  - [Testing](#testing)
+  - [Risk](#risk)
     - [Review Expectations](#review-expectations)
   - [Issue Reporting](#issue-reporting)
     - [Bug Reports](#bug-reports)
     - [Feature Requests](#feature-requests)
-    - [Labels](#labels)
+    - [Security Issues](#security-issues)
   - [Code of Conduct](#code-of-conduct)
-  - [Questions?](#questions)
   - [Related Documentation](#related-documentation)
 
-## Welcome
-
-Thank you for your interest in contributing to EQUIPA! Whether you're fixing a bug, improving documentation, adding tests, or proposing a new feature, your contributions are valued and appreciated.
-
-EQUIPA is a multi-agent AI orchestration platform — pure Python stdlib, zero pip dependencies, SQLite-based. We aim to keep it that way: lean, understandable, and reliable.
-
----
+Welcome! We're glad you're interested in contributing to EQUIPA — a multi-agent AI orchestration platform built in pure Python. Whether you're fixing a bug, adding a feature, improving documentation, or writing tests, your contribution matters. This project thrives on collaboration, and we want to make the process as smooth as possible.
 
 ## Development Setup
 
+EQUIPA is built with **pure Python stdlib** and has **zero pip dependencies**, so getting started is straightforward.
+
 ### Prerequisites
 
-- **Python 3.8+** (no external packages required — pure stdlib)
-- **SQLite 3** (bundled with Python)
-- **Git**
-- **Claude CLI** (for agent dispatch features — optional for most contributions)
+- Python 3.10+
+- SQLite3
+- Git
+- (Optional) An Ollama instance for local model testing
+- (Optional) Anthropic API access for Claude-based features
 
-### Getting Started
+### Local Setup
 
-1. **Fork and clone the repository:**
+1. **Clone the repository:**
    ```bash
-   git clone https://github.com/<your-username>/Equipa.git
-   cd Equipa
+   git clone https://github.com/your-org/Equipa-repo.git
+   cd Equipa-repo
    ```
 
-2. **Run the setup wizard** (configures database and local environment):
+2. **Run the interactive setup:**
    ```bash
    python equipa_setup.py
    ```
+   This will walk you through database initialization, configuration generation, and optional component setup (Sentinel, ForgeBot).
 
-3. **Initialize/migrate the database:**
+3. **Initialize the database manually (if needed):**
    ```bash
    python db_migrate.py
    ```
+   This runs all migrations and brings your schema to the latest version (v4+).
 
-4. **Verify your setup** by running the test suite:
+4. **Verify the installation:**
    ```bash
-   python test_early_termination.py
-   python test_loop_detection.py
-   python test_agent_messages.py
-   python test_agent_actions.py
-   python test_lesson_sanitizer.py
-   python test_lessons_injection.py
-   python test_episode_injection.py
-   python test_rubric_scoring.py
-   python test_rubric_quality_scorer.py
-   python test_task_type_routing.py
-   python test_early_termination_monologue.py
-   python test_forgesmith_simba.py
+   python -c "from equipa.db import get_db_connection; print('DB OK')"
+   python -m pytest tests/ -v
    ```
 
-### Zero Dependencies Policy
+### Project Structure
 
-EQUIPA uses **only the Python standard library**. Do not introduce pip dependencies. If you need functionality from an external package, implement it using stdlib or discuss the need in an issue first.
-
----
+```
+equipa/              # Core library — CLI, dispatch, parsing, monitoring, etc.
+tests/               # Test suite
+tools/               # Utilities — dashboard, arena, benchmarks, training data
+skills/              # Agent skill definitions (SARIF parsing, etc.)
+forgesmith*.py       # Self-improvement subsystems (GEPA, SIMBA, impact analysis)
+autoresearch_*.py    # Automated prompt optimization loops
+```
 
 ## Code Style
 
-### General Conventions
+EQUIPA follows a pragmatic, readable Python style. There are no external linters configured, but please adhere to these conventions:
 
-- **Pure Python stdlib** — no external dependencies
-- **Functions over classes** — the codebase favors standalone functions; use classes only when state management genuinely requires it
-- **SQLite for persistence** — all data flows through the 30+ table SQLite schema
-- **Descriptive function names** — `classify_agent_failure`, `build_checkpoint_context`, `parse_tester_output`
-- **Consistent `main()` entry points** — each script has a `main()` function as its entry point
+- **PEP 8** for general formatting — 4-space indentation, snake_case for functions and variables.
+- **No external dependencies.** This is a core project principle. Everything runs on Python stdlib. If you need something from PyPI, open an issue to discuss it first.
+- **Functions over classes** where possible. The codebase favors standalone functions with clear inputs/outputs. Classes are used sparingly (e.g., `LoopDetector`, `Finding`).
+- **Docstrings** aren't required on every function, but complex logic should have a comment explaining *why*, not just *what*.
+- **SQL in Python files** is fine — the project uses inline SQL with SQLite extensively. Use parameterized queries (`?` placeholders) to prevent injection.
+- **Keep imports stdlib-only.** Group them: stdlib first, then local project imports.
 
-### Naming Conventions
+### Security Conventions
 
-- **Files:** `snake_case.py` (e.g., `forge_orchestrator.py`, `lesson_sanitizer.py`)
-- **Functions:** `snake_case` (e.g., `get_db_connection`, `run_dev_test_loop`)
-- **Classes:** `PascalCase` (e.g., `LoopDetector`, `RolePromptModule`)
-- **Constants:** `UPPER_SNAKE_CASE`
-- **Test functions:** `test_<description>` (e.g., `test_fingerprint_extracts_blockers`)
+Given the project's nature (executing agent-generated code), security is taken seriously:
 
-### Code Patterns to Follow
-
-- Use `get_db(write=False)` / `get_db_connection(write=False)` pattern for database access
-- Use `log(msg)` helper functions for output
-- Guard destructive operations behind `dry_run` parameters
-- Include backup mechanisms before modifying config or prompts (see `backup_file()`)
-
-### Documentation
-
-- Include docstrings for public functions
-- Update `CLAUDE.md` if you change the file map or add new modules
-- Keep comments practical — explain *why*, not *what*
-
----
+- Use `safe_path()` to validate any file paths derived from user/agent input.
+- Use `is_blocked_command()` and `is_safe_read_command()` when handling shell execution.
+- Use `wrap_untrusted()` from `equipa/security.py` for untrusted content.
+- Sanitize lessons and error signatures through `lesson_sanitizer.py` before storage.
 
 ## Making Changes
 
@@ -137,186 +119,177 @@ EQUIPA uses **only the Python standard library**. Do not introduce pip dependenc
 
 Use descriptive branch names with a prefix:
 
-- `feature/` — new functionality (e.g., `feature/parallel-goal-dispatch`)
-- `fix/` — bug fixes (e.g., `fix/loop-detector-reset-counter`)
-- `test/` — test additions or improvements (e.g., `test/episode-injection-edge-cases`)
-- `docs/` — documentation updates (e.g., `docs/update-setup-guide`)
-- `refactor/` — code improvements without behavior change (e.g., `refactor/consolidate-db-helpers`)
+- `feat/` — new features (e.g., `feat/ollama-model-routing`)
+- `fix/` — bug fixes (e.g., `fix/loop-detection-false-positive`)
+- `docs/` — documentation changes
+- `test/` — new or improved tests
+- `refactor/` — code cleanup without behavior change
 
 ### Commit Messages
 
-Write clear, descriptive commit messages:
+Write clear, concise commit messages:
 
 ```
 <type>: <short summary>
 
-<optional body explaining why, not what>
+<optional longer description>
 ```
-
-**Types:** `feat`, `fix`, `test`, `docs`, `refactor`, `perf`
 
 **Examples:**
 ```
-feat: add cost breaker configurable via dispatch config
-fix: loop detector not resetting counter on file changes
-test: add edge cases for lesson sanitizer base64 stripping
-docs: update CLAUDE.md with new forgesmith_simba module
+fix: prevent monologue detection from firing during first 5 turns
+feat: add cost breaker termination for runaway agents
+test: add coverage for alternating tool loop patterns
+docs: update CLAUDE.md with new forgesmith_impact module
 ```
 
-### Key Architectural Considerations
+### Development Workflow
 
-- **`forge_orchestrator.py`** is the core — changes here have wide impact. Be extra careful and thorough with testing.
-- **`forgesmith.py`** and its siblings (`forgesmith_simba.py`, `forgesmith_gepa.py`, `forgesmith_impact.py`) form the self-improvement engine. Changes should preserve the analysis → propose → validate → apply pipeline.
-- **Database schema changes** must go through `db_migrate.py` with a proper migration function (e.g., `migrate_v4_to_v5`).
-- **The `dry_run` pattern** is sacred — any function that writes to disk or database should support `dry_run=True`.
-
----
+1. Create a branch from `main`.
+2. Make your changes in small, logical commits.
+3. Run the test suite before pushing (see Testing below).
+4. Open a pull request with a clear description of what changed and why.
 
 ## Testing
 
-### Running Tests
+The project has an extensive test suite in `tests/`. Tests are written using both `pytest` and standalone test runners.
 
-Each test module is a standalone script. Run individual test files:
+### Running All Tests
 
 ```bash
-# Core orchestration tests
-python test_early_termination.py
-python test_loop_detection.py
-
-# Agent communication tests
-python test_agent_messages.py
-python test_agent_actions.py
-
-# Learning system tests
-python test_lessons_injection.py
-python test_lesson_sanitizer.py
-python test_episode_injection.py
-
-# Quality and scoring tests
-python test_rubric_scoring.py
-python test_rubric_quality_scorer.py
-
-# Routing and dispatch tests
-python test_task_type_routing.py
-
-# Monologue detection tests
-python test_early_termination_monologue.py
-
-# Forgesmith self-improvement tests
-python test_forgesmith_simba.py
-
-# Database migration benchmarks
-python benchmark_migrations.py
+python -m pytest tests/ -v
 ```
 
-To run all tests:
+### Running Specific Test Files
 
 ```bash
-for f in test_*.py; do echo "=== $f ===" && python "$f" && echo "PASS" || echo "FAIL"; done
+# Early termination logic
+python -m pytest tests/test_early_termination.py -v
+
+# Loop detection
+python -m pytest tests/test_loop_detection.py -v
+
+# Agent message passing
+python -m pytest tests/test_agent_messages.py -v
+
+# Forgesmith SIMBA rules
+python -m pytest tests/test_forgesmith_simba.py -v
+
+# Rubric quality scoring
+python tests/test_rubric_quality_scorer.py
+
+# Lesson sanitizer
+python tests/test_lesson_sanitizer.py
+
+# Episode injection
+python tests/test_episode_injection.py
+```
+
+### Running Benchmarks
+
+```bash
+python tools/benchmark_migrations.py
 ```
 
 ### What to Test
 
-- **New functions:** Write tests following the existing pattern — standalone test functions named `test_<description>()`
-- **Bug fixes:** Add a regression test that would have caught the bug
-- **Database changes:** Test migration paths and verify data integrity
-- **Sanitization/security:** Test adversarial inputs (see `test_lesson_sanitizer.py` for examples — injection tags, base64 payloads, ANSI escapes)
-- **Edge cases:** Empty inputs, `None` values, boundary conditions, and error paths
-- **Dry run behavior:** Verify that `dry_run=True` never modifies state
+- **New functions** should have corresponding tests in `tests/`.
+- **Bug fixes** should include a regression test that would have caught the bug.
+- **Security-sensitive changes** (command execution, file path handling, lesson injection) must have tests verifying the safety boundaries.
+- **Database schema changes** need migration tests — see `tools/benchmark_migrations.py` for the pattern.
 
-### Testing Conventions
+### Test Conventions
 
-- Tests use in-memory SQLite databases (`:memory:`) or temporary files — never touch production data
-- Each test module includes a `main()` or `run_tests()` / `run_all_tests()` entry point
-- Use `setup_test_data()` / `cleanup_*()` patterns for test fixtures
-- Tests should be self-contained and order-independent
-
----
+- Some test files use `pytest` fixtures and `conftest.py`; others use standalone `main()` / `run_all_tests()` runners. Follow the pattern of the file you're modifying.
+- Tests that need a database should create a temporary one (see `make_temp_db()` in `test_agent_messages.py`).
+- Use `monkeypatch` for mocking external calls (Ollama, Claude API, subprocess).
+- The `conftest.py` handles test ordering and configuration — don't bypass it.
 
 ## Pull Request Process
 
 ### Before Submitting
 
-1. **Run the full test suite** — all tests must pass
-2. **Test your changes manually** if they affect agent dispatch or database operations
-3. **Check the dry_run path** if your change involves writes
-4. **Update `CLAUDE.md`** if you've added or renamed files/modules
-5. **Keep the zero-dependency constraint** — no new pip packages
+- [ ] All existing tests pass (`python -m pytest tests/ -v`)
+- [ ] New code has test coverage
+- [ ] No new external dependencies introduced
+- [ ] Security-sensitive paths use existing safety functions
+- [ ] Commit messages are clear and descriptive
 
-### PR Description
+### PR Description Template
 
-Include in your pull request:
+```markdown
+## What
 
-- **What** — clear summary of the change
-- **Why** — the problem it solves or feature it adds
-- **How** — brief description of the approach
-- **Testing** — which tests you ran and any manual testing performed
-- **Breaking changes** — flag any changes to database schema, config format, or CLI interface
+Brief description of what this PR does.
+
+## Why
+
+The problem this solves or the feature this enables.
+
+## How
+
+Key implementation details, if non-obvious.
+
+## Testing
+
+How you verified this works. Which tests were added or modified.
+
+## Risk
+
+What could break? Does this affect agent dispatch, prompt generation, 
+or database schema?
+```
 
 ### Review Expectations
 
-- PRs will be reviewed for correctness, test coverage, and adherence to the project's architectural patterns
-- Expect feedback on edge cases, error handling, and the dry_run path
-- Database schema changes and changes to `forge_orchestrator.py` receive extra scrutiny
-- Small, focused PRs are reviewed faster than large omnibus changes
-
----
+- PRs will be reviewed for correctness, security implications, and adherence to the zero-dependency principle.
+- Schema changes require a migration in `db_migrate.py` and must be backward-compatible.
+- Changes to prompt files or Forgesmith logic may need extra scrutiny since they affect agent behavior at scale.
+- Expect constructive feedback — we optimize for a reliable, secure system.
 
 ## Issue Reporting
 
 ### Bug Reports
 
-When filing a bug, please include:
+Open an issue with:
 
-- **What happened** vs. **what you expected**
-- **Steps to reproduce**
-- **Which script/module** is affected (e.g., `forge_orchestrator.py`, `forgesmith.py`)
-- **Database state** if relevant (schema version from `db_migrate.py`)
-- **Error output** — full traceback if available
-- **Environment** — Python version, OS
+- **Title:** Clear, specific summary of the problem.
+- **Environment:** Python version, OS, SQLite version.
+- **Steps to reproduce:** What you did, what you expected, what happened instead.
+- **Logs/output:** Relevant error messages, stack traces, or agent logs.
+- **Database state:** If relevant, which tables/rows are involved (don't share sensitive data).
 
 ### Feature Requests
 
-For feature requests, please describe:
+Open an issue with:
 
-- **The problem** you're trying to solve
-- **Your proposed solution** (if you have one)
-- **Alternatives considered**
-- **Impact on existing components** — which modules would be affected
+- **Title:** What you'd like to see.
+- **Use case:** Why this would be useful — what workflow does it improve?
+- **Proposed approach:** If you have ideas on implementation, share them. Include which modules would be affected.
+- **Constraints:** Remember the zero-dependency and pure-stdlib principles.
 
-### Labels
+### Security Issues
 
-Use descriptive titles. Prefix with the affected area when possible:
-
-- `[orchestrator] Agent retries not respecting max_retries`
-- `[forgesmith] SIMBA rules not pruning stale entries`
-- `[schema] Need migration for new quality_scores column`
-
----
+If you discover a security vulnerability (especially around command execution, path traversal, or prompt injection), **please report it privately** rather than opening a public issue. Contact the maintainers directly.
 
 ## Code of Conduct
 
-We are committed to providing a welcoming, inclusive, and harassment-free experience for everyone. We expect all contributors to:
+We are committed to providing a welcoming, inclusive, and harassment-free experience for everyone. All contributors are expected to:
 
-- **Be respectful** — treat others as you'd want to be treated
-- **Be constructive** — offer helpful feedback, not dismissive criticism
-- **Be collaborative** — we're all building something together
-- **Be patient** — especially with newcomers learning the codebase
-- **Assume good intent** — misunderstandings happen; clarify before escalating
+- Be respectful and constructive in all interactions.
+- Welcome newcomers and help them get oriented.
+- Focus feedback on the code, not the person.
+- Assume good intent, and clarify before escalating.
 
-Unacceptable behavior includes harassment, personal attacks, trolling, and publishing others' private information. Violations can be reported to the project maintainers and may result in removal from the project.
+We have zero tolerance for harassment, discrimination, or hostile behavior of any kind. Maintainers reserve the right to remove content or ban contributors who violate these principles.
 
 ---
 
-## Questions?
-
-If you're unsure about anything — where to start, how something works, whether a change makes sense — open an issue or start a discussion. There are no bad questions, especially in a codebase that coordinates AI agents to rebuild things from scratch. The Marquis would approve.
+Thank you for contributing to EQUIPA. Every improvement — whether it's a one-line fix or a new subsystem — helps make multi-agent orchestration more reliable for everyone. 🚀
 ---
 
 ## Related Documentation
 
-- [Readme](README.md)
 - [Architecture](ARCHITECTURE.md)
 - [Api](API.md)
 - [Deployment](DEPLOYMENT.md)
-

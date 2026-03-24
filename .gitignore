@@ -122,3 +122,5 @@ ecc-vs-equipa-analysis.md
 LANDSCAPE-REPORT-*.md
 MONOLITH-SPLIT-PLAN.md
 ECC-IMPLEMENTATION-PLAN.md
+docs-config.json
+tmp-*.md

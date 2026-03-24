@@ -4,86 +4,113 @@
 
 - [DEPLOYMENT.md — EQUIPA](#deploymentmd-equipa)
   - [TL;DR](#tldr)
-- [Follow the interactive setup wizard — it handles DB, config, and file placement](#follow-the-interactive-setup-wizard-it-handles-db-config-and-file-placement)
   - [Prerequisites](#prerequisites)
   - [Step-by-Step Setup](#step-by-step-setup)
     - [1. Clone the repository](#1-clone-the-repository)
-    - [2. Verify Python version](#2-verify-python-version)
-- [Must be 3.10 or higher](#must-be-310-or-higher)
-    - [3. Run the interactive setup wizard](#3-run-the-interactive-setup-wizard)
-    - [4. Initialize / migrate the database (if not using the wizard)](#4-initialize-migrate-the-database-if-not-using-the-wizard)
-    - [5. Verify the installation](#5-verify-the-installation)
-    - [6. Run a basic test to confirm everything works](#6-run-a-basic-test-to-confirm-everything-works)
+    - [2. Run the interactive setup wizard](#2-run-the-interactive-setup-wizard)
+    - [3. Run database migrations (if upgrading or starting fresh)](#3-run-database-migrations-if-upgrading-or-starting-fresh)
+    - [4. Verify the installation](#4-verify-the-installation)
+    - [5. Run your first task](#5-run-your-first-task)
+- [Dispatch pending work automatically](#dispatch-pending-work-automatically)
+- [Or dispatch a specific task by ID](#or-dispatch-a-specific-task-by-id)
+- [Or dispatch by goal file](#or-dispatch-by-goal-file)
   - [Environment Variables](#environment-variables)
+  - [Configuration Files](#configuration-files)
+    - [Editing dispatch config](#editing-dispatch-config)
+- [View current config](#view-current-config)
+- [Key sections:](#key-sections)
+- [- "roles": defines available agent roles](#-roles-defines-available-agent-roles)
+- [- "features": feature flag toggles](#-features-feature-flag-toggles)
+- [- "models": provider and model per role](#-models-provider-and-model-per-role)
+- [- "max_turns": turn budgets per complexity level](#-max_turns-turn-budgets-per-complexity-level)
   - [Running in Production](#running-in-production)
-    - [Option A: Direct execution (simplest)](#option-a-direct-execution-simplest)
-- [Dispatch tasks automatically based on priority scoring](#dispatch-tasks-automatically-based-on-priority-scoring)
-- [Run a specific task by ID](#run-a-specific-task-by-id)
-- [Run multiple tasks in parallel](#run-multiple-tasks-in-parallel)
-- [Run the planner to generate tasks from a goal](#run-the-planner-to-generate-tasks-from-a-goal)
-    - [Option B: Cron-based scheduling (recommended for production)](#option-b-cron-based-scheduling-recommended-for-production)
-- [Edit crontab](#edit-crontab)
-- [Run ForgeSmith analysis every 6 hours](#run-forgesmith-analysis-every-6-hours)
-- [Run SIMBA rule generation weekly](#run-simba-rule-generation-weekly)
+    - [Option A: Cron-based (recommended for solo/small team)](#option-a-cron-based-recommended-for-solosmall-team)
+- [Run Forgesmith optimizer nightly at 2 AM](#run-forgesmith-optimizer-nightly-at-2-am)
+- [Forgesmith self-improvement loop](#forgesmith-self-improvement-loop)
 - [Nightly review report](#nightly-review-report)
 - [Auto-dispatch pending work every 30 minutes](#auto-dispatch-pending-work-every-30-minutes)
-    - [Option C: systemd service](#option-c-systemd-service)
-    - [Monitoring & Dashboards](#monitoring-dashboards)
-- [Performance dashboard](#performance-dashboard)
-- [Performance analysis report](#performance-analysis-report)
-- [Nightly review summary](#nightly-review-summary)
-    - [ForgeSmith (Self-Optimization Engine)](#forgesmith-self-optimization-engine)
-- [Dry run — see what changes would be made](#dry-run-see-what-changes-would-be-made)
-- [Full auto-optimization](#full-auto-optimization)
+    - [Option B: systemd service](#option-b-systemd-service)
+- [/etc/systemd/system/equipa-dispatch.service](#etcsystemdsystemequipa-dispatchservice)
+- [/etc/systemd/system/equipa-dispatch.timer](#etcsystemdsystemequipa-dispatchtimer)
+    - [Option C: PM2 (if you prefer Node-style process management)](#option-c-pm2-if-you-prefer-node-style-process-management)
+  - [Docker](#docker)
+- [Dockerfile](#dockerfile)
+- [No pip install needed — zero dependencies](#no-pip-install-needed-zero-dependencies)
+- [Initialize database](#initialize-database)
+- [Default: run nightly review (swap for your use case)](#default-run-nightly-review-swap-for-your-use-case)
+- [Build](#build)
+- [Run nightly review](#run-nightly-review)
+- [Run analysis tools](#run-analysis-tools)
+- [Interactive shell](#interactive-shell)
+    - [Docker Compose (dashboard + analysis)](#docker-compose-dashboard-analysis)
+- [docker-compose.yml](#docker-composeyml)
+  - [Running Forgesmith (Self-Improvement Engine)](#running-forgesmith-self-improvement-engine)
+- [Full analysis + apply changes](#full-analysis-apply-changes)
+- [Dry run (analyze only, no changes applied)](#dry-run-analyze-only-no-changes-applied)
 - [Report only](#report-only)
+- [Propose prompt optimizations (OPRO-style)](#propose-prompt-optimizations-opro-style)
 - [Rollback a specific run](#rollback-a-specific-run)
 - [SIMBA rule generation](#simba-rule-generation)
 - [GEPA prompt evolution](#gepa-prompt-evolution)
-- [Autoresearch optimization loop](#autoresearch-optimization-loop)
-  - [Docker](#docker)
-- [Install git (needed for diff detection) and sqlite3 CLI (optional debugging)](#install-git-needed-for-diff-detection-and-sqlite3-cli-optional-debugging)
-- [Copy all project files](#copy-all-project-files)
-- [Create directories for persistent data](#create-directories-for-persistent-data)
-- [Run database migrations](#run-database-migrations)
-- [Default: show help](#default-show-help)
-- [Build](#build)
-- [Run with persistent database](#run-with-persistent-database)
-- [Interactive setup](#interactive-setup)
-- [Run tests](#run-tests)
+- [Backfill episode data from logs](#backfill-episode-data-from-logs)
+  - [Running Tests](#running-tests)
+- [Run all tests](#run-all-tests)
+- [Run a specific test file](#run-a-specific-test-file)
+- [Run tests without pytest (each file has a main())](#run-tests-without-pytest-each-file-has-a-main)
+- [Benchmark database migrations](#benchmark-database-migrations)
   - [Troubleshooting](#troubleshooting)
-    - [Database issues](#database-issues)
-    - [Agent execution issues](#agent-execution-issues)
-    - [Ollama-specific issues](#ollama-specific-issues)
-    - [ForgeSmith issues](#forgesmith-issues)
-    - [General issues](#general-issues)
-    - [Running the full test suite](#running-the-full-test-suite)
+    - [Database not found](#database-not-found)
+- [OR](#or)
+    - [Claude CLI not found](#claude-cli-not-found)
+- [Verify installation](#verify-installation)
+- [If using API directly, ensure the key is set](#if-using-api-directly-ensure-the-key-is-set)
+    - [Database schema is outdated](#database-schema-is-outdated)
+    - [Port / process conflicts (Ollama)](#port-process-conflicts-ollama)
+- [Check if Ollama is running](#check-if-ollama-is-running)
+- [Start Ollama](#start-ollama)
+- [Or check health via the script](#or-check-health-via-the-script)
+    - [Permission denied on project directories](#permission-denied-on-project-directories)
+- [Check ownership](#check-ownership)
+- [Fix if needed](#fix-if-needed)
+    - [Agent stuck in infinite loop](#agent-stuck-in-infinite-loop)
+- [Check loop detection thresholds in dispatch_config.json](#check-loop-detection-thresholds-in-dispatch_configjson)
+- [Manually kill a stuck task (sets status to 'failed')](#manually-kill-a-stuck-task-sets-status-to-failed)
+    - [Forgesmith rollback](#forgesmith-rollback)
+- [List recent Forgesmith runs](#list-recent-forgesmith-runs)
+- [Rollback a specific run](#rollback-a-specific-run)
+- [Rollback autoresearch prompt changes](#rollback-autoresearch-prompt-changes)
+    - [Tests fail with "no such table"](#tests-fail-with-no-such-table)
+- [The test database may need initialization](#the-test-database-may-need-initialization)
+- [Some tests create temporary databases — ensure /tmp is writable](#some-tests-create-temporary-databases-ensure-tmp-is-writable)
+    - ["Too many API calls" / Rate limiting](#too-many-api-calls-rate-limiting)
+  - [Architecture Quick Reference](#architecture-quick-reference)
   - [Related Documentation](#related-documentation)
 
 ## TL;DR
 
 ```bash
-git clone <your-repo-url> && cd Equipa
-python3 equipa_setup.py
-# Follow the interactive setup wizard — it handles DB, config, and file placement
-python3 forge_orchestrator.py --help
+git clone <your-equipa-repo-url> && cd Equipa-repo
+python3 equipa_setup.py                  # Interactive guided setup
+python3 db_migrate.py                    # Ensure DB schema is current
+python3 -m equipa.cli                    # Run the orchestrator
 ```
 
-That's it. Pure Python stdlib, zero pip dependencies, SQLite-based.
+> EQUIPA is pure Python stdlib with zero pip dependencies. If you have Python 3.10+ and SQLite, you can run it.
 
 ---
 
 ## Prerequisites
 
-| Requirement | Minimum Version | Purpose | Install |
-|---|---|---|---|
-| **Python** | 3.10+ | Runtime (stdlib only, no pip needed) | [python.org](https://www.python.org/downloads/) |
-| **SQLite** | 3.35+ | Database (bundled with Python) | Usually pre-installed |
-| **Claude CLI** | Latest | Agent execution backend | [claude.ai/docs](https://docs.anthropic.com/en/docs/claude-cli) |
-| **Git** | 2.x | Version control, diff detection | [git-scm.com](https://git-scm.com/) |
-| **gh** (GitHub CLI) | Optional | Repo setup automation | [cli.github.com](https://cli.github.com/) |
-| **Ollama** | Optional | Local model support | [ollama.com](https://ollama.com/) |
+| Requirement | Minimum Version | Check Command | Install Link |
+|-------------|----------------|---------------|--------------|
+| Python | 3.10+ | `python3 --version` | [python.org](https://www.python.org/downloads/) |
+| SQLite | 3.35+ (bundled with Python) | `python3 -c "import sqlite3; print(sqlite3.sqlite_version)"` | Usually pre-installed |
+| Git | 2.x | `git --version` | [git-scm.com](https://git-scm.com/) |
+| Claude CLI / API key | Latest | `claude --version` | [Anthropic Console](https://console.anthropic.com/) |
+| `gh` CLI (optional) | 2.x | `gh --version` | [cli.github.com](https://cli.github.com/) |
+| Ollama (optional, for local models) | Latest | `ollama --version` | [ollama.com](https://ollama.com/) |
 
-> **Key point:** EQUIPA has **zero pip dependencies**. Everything runs on Python's standard library.
+> **Note:** EQUIPA has **zero pip dependencies** — the entire core runs on Python's standard library. Optional components (Forgesmith GEPA with DSPy, Ollama agent) may have their own requirements.
 
 ---
 
@@ -92,56 +119,51 @@ That's it. Pure Python stdlib, zero pip dependencies, SQLite-based.
 ### 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
-cd Equipa
+git clone <your-equipa-repo-url>
+cd Equipa-repo
 ```
 
-### 2. Verify Python version
-
-```bash
-python3 --version
-# Must be 3.10 or higher
-```
-
-### 3. Run the interactive setup wizard
+### 2. Run the interactive setup wizard
 
 ```bash
 python3 equipa_setup.py
 ```
 
-The wizard will walk you through:
+This will walk you through:
+- Verifying prerequisites (`python3`, `sqlite3`, `git`, `claude`)
 - Choosing an install path
-- Creating and initializing the SQLite database (30+ table schema)
-- Copying project files
-- Generating configuration files
-- Generating MCP config and `.mcp` files
-- Generating `CLAUDE.md` for your instance
-- Setting up ForgeSmith cron (optional)
-- Setting up Sentinel monitoring (optional)
-- Setting up ForgeBot (optional)
+- Creating and initializing the SQLite database
+- Copying files into place
+- Generating configuration files (`dispatch_config.json`, MCP config, `CLAUDE.md`)
+- Optionally setting up Forgesmith cron, Sentinel, and ForgeBot
 
-### 4. Initialize / migrate the database (if not using the wizard)
+### 3. Run database migrations (if upgrading or starting fresh)
 
 ```bash
 python3 db_migrate.py
 ```
 
-This auto-detects your current schema version and applies all pending migrations (v0→v1→v2→v3→v4). It creates a backup before each migration.
+This auto-detects the current schema version and applies incremental migrations (v0→v1→v2→v3→v4). A backup is created before each migration.
 
-### 5. Verify the installation
+### 4. Verify the installation
 
 ```bash
-python3 forge_orchestrator.py --help
+python3 db_migrate.py              # Should print "Database is up to date"
+python3 -m equipa.cli --help       # Show CLI options
+python3 nightly_review.py          # Generate a portfolio status report
 ```
 
-### 6. Run a basic test to confirm everything works
+### 5. Run your first task
 
 ```bash
-python3 test_early_termination.py
-python3 test_loop_detection.py
-python3 test_agent_messages.py
-python3 test_agent_actions.py
-python3 test_lesson_sanitizer.py
+# Dispatch pending work automatically
+python3 -m equipa.cli --auto
+
+# Or dispatch a specific task by ID
+python3 -m equipa.cli --task 42
+
+# Or dispatch by goal file
+python3 -m equipa.cli --goals goals.json
 ```
 
 ---
@@ -149,286 +171,395 @@ python3 test_lesson_sanitizer.py
 ## Environment Variables
 
 | Variable | Description | Example | Required? |
-|---|---|---|---|
-| `THEFORGE_DB` | Path to the SQLite database file | `./theforge.db` | No — defaults to script-relative `theforge.db` |
-| `EQUIPA_BASE` | Base install directory | `/home/you/equipa` | No — auto-detected from script location |
-| `PROJECT_BASE_DIR` | Root directory containing all project repos | `/home/you/projects` | No — if set, `forge_config.json` paths like `$PROJECT_BASE_DIR/MyProject` are resolved |
-| `ANTHROPIC_API_KEY` | API key for Claude API calls (ForgeSmith, autoresearch) | `sk-ant-...` | Only if using API-based features |
-| `OLLAMA_BASE_URL` | Base URL for Ollama instance | `http://localhost:11434` | Only if using Ollama agents |
-| `OLLAMA_MODEL` | Default Ollama model name | `qwen3.5:27b` | Only if using Ollama agents |
-| `SSH_USER` | SSH user for remote sync operations | `user` | Only if using remote sync |
-| `SSH_KEY_PATH` | Path to SSH private key | `~/.ssh/id_ed25519` | Only if using remote sync |
-| `CLAUDINATOR_HOST` | Hostname/IP of the primary server | `192.168.x.x` | Only if syncing remotely |
-| `TRAINING_RESULTS_DIR` | Directory for training result markers | `/path/to/training-results` | Only if using training ingestion |
-| `UVX_PATH` | Full path to the `uvx` binary | `/home/you/.local/bin/uvx` | Only if `uvx` not in PATH |
+|----------|-------------|---------|-----------|
+| `ANTHROPIC_API_KEY` | API key for Claude (Anthropic) | `sk-ant-api03-...` | **Yes** (unless using Ollama only) |
+| `EQUIPA_DB` | Path to the SQLite database | `/home/user/equipa/equipa.db` | No — auto-detected from config |
+| `EQUIPA_HOME` | Base directory for EQUIPA installation | `/home/user/equipa` | No — set during `equipa_setup.py` |
+| `OLLAMA_BASE_URL` | Base URL for Ollama API (local models) | `http://localhost:11434` | No — only if using Ollama provider |
+| `OLLAMA_MODEL` | Default Ollama model name | `codellama:13b` | No — configured in `dispatch_config.json` |
+| `FORGESMITH_DRY_RUN` | Run Forgesmith analysis without applying changes | `1` | No — default is `0` |
 
-> **Note:** See `.env.example` for the full list of configurable environment variables. Most configuration is stored in config files generated by `equipa_setup.py` — see `forge_config.example.json`, `dispatch_config.example.json`, and `mcp_config.example.json` for templates.
+> Most configuration lives in `dispatch_config.json` and the database itself, not environment variables. The setup wizard generates these files for you.
+
+---
+
+## Configuration Files
+
+After running `equipa_setup.py`, you'll have:
+
+| File | Purpose |
+|------|---------|
+| `dispatch_config.json` | Agent routing, model selection, feature flags, role prompts |
+| `CLAUDE.md` | Project context injected into agent sessions |
+| `.mcp.json` | MCP server configuration for Claude Desktop/CLI |
+| `prompts/` | Role-specific system prompts (developer, tester, security, etc.) |
+| `skills/` | Reusable skill definitions for agents |
+
+### Editing dispatch config
+
+```bash
+# View current config
+cat dispatch_config.json | python3 -m json.tool
+
+# Key sections:
+# - "roles": defines available agent roles
+# - "features": feature flag toggles
+# - "models": provider and model per role
+# - "max_turns": turn budgets per complexity level
+```
 
 ---
 
 ## Running in Production
 
-### Option A: Direct execution (simplest)
+### Option A: Cron-based (recommended for solo/small team)
+
+The setup wizard can configure this automatically. Manually:
 
 ```bash
-# Dispatch tasks automatically based on priority scoring
-python3 forge_orchestrator.py --dispatch
-
-# Run a specific task by ID
-python3 forge_orchestrator.py --task <task_id>
-
-# Run multiple tasks in parallel
-python3 forge_orchestrator.py --tasks 101,102,103
-
-# Run the planner to generate tasks from a goal
-python3 forge_orchestrator.py --plan --goal "Build a REST API for user management" --project <project_id>
-```
-
-### Option B: Cron-based scheduling (recommended for production)
-
-```bash
-# Edit crontab
+# Run Forgesmith optimizer nightly at 2 AM
 crontab -e
 ```
 
-Add entries (**suggestion** — adjust paths and schedules to your needs):
-
 ```cron
-# Set EQUIPA_BASE to your install directory
-EQUIPA_BASE=/home/you/equipa
-
-# Run ForgeSmith analysis every 6 hours
-0 */6 * * * cd $EQUIPA_BASE && python3 forgesmith.py --auto >> $EQUIPA_BASE/logs/forgesmith.log 2>&1
-
-# Run SIMBA rule generation weekly
-0 3 * * 0 cd $EQUIPA_BASE && python3 forgesmith_simba.py >> $EQUIPA_BASE/logs/simba.log 2>&1
+# Forgesmith self-improvement loop
+0 2 * * * cd /path/to/equipa && python3 forgesmith.py --full >> /var/log/equipa/forgesmith.log 2>&1
 
 # Nightly review report
-0 22 * * * cd $EQUIPA_BASE && python3 nightly_review.py >> $EQUIPA_BASE/logs/nightly.log 2>&1
+0 6 * * * cd /path/to/equipa && python3 nightly_review.py >> /var/log/equipa/nightly.log 2>&1
 
 # Auto-dispatch pending work every 30 minutes
-*/30 * * * * cd $EQUIPA_BASE && python3 forge_orchestrator.py --dispatch >> $EQUIPA_BASE/logs/dispatch.log 2>&1
+*/30 * * * * cd /path/to/equipa && python3 -m equipa.cli --auto >> /var/log/equipa/dispatch.log 2>&1
 ```
 
-### Option C: systemd service
-
-Create `/etc/systemd/system/equipa-dispatch.service`:
+### Option B: systemd service
 
 ```ini
+# /etc/systemd/system/equipa-dispatch.service
 [Unit]
-Description=EQUIPA Auto-Dispatch
+Description=EQUIPA Agent Dispatcher
 After=network.target
 
 [Service]
-Type=simple
+Type=oneshot
 User=equipa
-WorkingDirectory=/home/equipa/Equipa
-ExecStart=/usr/bin/python3 forge_orchestrator.py --dispatch --loop
-Restart=on-failure
-RestartSec=60
-StandardOutput=journal
-StandardError=journal
+WorkingDirectory=/home/equipa/equipa
+ExecStart=/usr/bin/python3 -m equipa.cli --auto
+Environment=ANTHROPIC_API_KEY=sk-ant-api03-your-key-here
+StandardOutput=append:/var/log/equipa/dispatch.log
+StandardError=append:/var/log/equipa/dispatch.log
 
 [Install]
 WantedBy=multi-user.target
 ```
 
+```ini
+# /etc/systemd/system/equipa-dispatch.timer
+[Unit]
+Description=Run EQUIPA dispatch every 30 minutes
+
+[Timer]
+OnCalendar=*:0/30
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable equipa-dispatch
-sudo systemctl start equipa-dispatch
-sudo journalctl -u equipa-dispatch -f
+sudo systemctl enable --now equipa-dispatch.timer
+sudo systemctl status equipa-dispatch.timer
 ```
 
-### Monitoring & Dashboards
+### Option C: PM2 (if you prefer Node-style process management)
 
 ```bash
-# Performance dashboard
-python3 forge_dashboard.py
-
-# Performance analysis report
-python3 analyze_performance.py --days 30
-
-# Nightly review summary
-python3 nightly_review.py
-```
-
-### ForgeSmith (Self-Optimization Engine)
-
-```bash
-# Dry run — see what changes would be made
-python3 forgesmith.py --dry-run
-
-# Full auto-optimization
-python3 forgesmith.py --auto
-
-# Report only
-python3 forgesmith.py --report
-
-# Rollback a specific run
-python3 forgesmith.py --rollback <run_id>
-
-# SIMBA rule generation
-python3 forgesmith_simba.py --dry-run
-python3 forgesmith_simba.py
-
-# GEPA prompt evolution
-python3 forgesmith_gepa.py --dry-run
-python3 forgesmith_gepa.py
-
-# Autoresearch optimization loop
-python3 autoresearch_loop.py --role developer --target 85
+pm2 start "python3 -m equipa.cli --auto" --name equipa-dispatch --cron "*/30 * * * *" --no-autorestart
+pm2 save
 ```
 
 ---
 
 ## Docker
 
-> **Suggestion:** Since EQUIPA is pure Python stdlib with SQLite, Docker is straightforward but optional. The system is designed to run directly on the host alongside Claude CLI.
+> **Note:** EQUIPA is designed to run directly on the host (it needs access to local git repos, the Claude CLI, and project directories). Docker is best suited for the database + dashboard components, not the full agent dispatch loop.
 
 ```dockerfile
+# Dockerfile
 FROM python:3.12-slim
 
-# Install git (needed for diff detection) and sqlite3 CLI (optional debugging)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# No pip install needed — zero dependencies
+RUN apt-get update && apt-get install -y \
     git \
     sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+COPY . /app/
 
-# Copy all project files
-COPY . .
-
-# Create directories for persistent data
-RUN mkdir -p /data/db /data/logs /data/backups /data/checkpoints
-
-# Run database migrations
+# Initialize database
 RUN python3 db_migrate.py || true
 
-# Default: show help
-CMD ["python3", "forge_orchestrator.py", "--help"]
+# Default: run nightly review (swap for your use case)
+CMD ["python3", "nightly_review.py"]
 ```
 
 ```bash
 # Build
 docker build -t equipa .
 
-# Run with persistent database
-docker run -v equipa-data:/data \
-  -e EQUIPA_DB=/data/db/theforge.db \
-  equipa python3 forge_orchestrator.py --dispatch
+# Run nightly review
+docker run --rm \
+  -v /path/to/equipa.db:/app/equipa.db \
+  -e ANTHROPIC_API_KEY=sk-ant-api03-your-key \
+  equipa
 
-# Interactive setup
-docker run -it -v equipa-data:/data equipa python3 equipa_setup.py
+# Run analysis tools
+docker run --rm \
+  -v /path/to/equipa.db:/app/equipa.db \
+  equipa python3 analyze_performance.py
 
-# Run tests
-docker run equipa python3 test_early_termination.py
+# Interactive shell
+docker run -it --rm \
+  -v /path/to/equipa.db:/app/equipa.db \
+  equipa bash
 ```
 
-**Docker Compose** (suggestion):
+### Docker Compose (dashboard + analysis)
 
 ```yaml
+# docker-compose.yml
 version: '3.8'
 services:
-  equipa:
+  equipa-dashboard:
     build: .
+    command: python3 tools/forge_dashboard.py
     volumes:
-      - equipa-db:/data/db
-      - equipa-logs:/data/logs
-      - equipa-backups:/data/backups
-      - ./projects:/projects  # Mount your project directories
+      - ./equipa.db:/app/equipa.db
     environment:
-      - EQUIPA_DB=/data/db/theforge.db
-    command: python3 forge_orchestrator.py --dispatch
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 
-volumes:
-  equipa-db:
-  equipa-logs:
-  equipa-backups:
+  equipa-forgesmith:
+    build: .
+    command: python3 forgesmith.py --full
+    volumes:
+      - ./equipa.db:/app/equipa.db
+      - ./prompts:/app/prompts
+      - ./backups:/app/backups
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 ```
 
-> **Important:** Claude CLI must be available inside the container for agent execution. If using Claude CLI, you'll need to mount your Claude configuration or set up authentication inside the container.
+---
+
+## Running Forgesmith (Self-Improvement Engine)
+
+Forgesmith analyzes agent performance and evolves prompts, configs, and rules.
+
+```bash
+# Full analysis + apply changes
+python3 forgesmith.py --full
+
+# Dry run (analyze only, no changes applied)
+python3 forgesmith.py --full --dry-run
+
+# Report only
+python3 forgesmith.py --report
+
+# Propose prompt optimizations (OPRO-style)
+python3 forgesmith.py --propose
+
+# Rollback a specific run
+python3 forgesmith.py --rollback <run-id>
+
+# SIMBA rule generation
+python3 forgesmith_simba.py
+
+# GEPA prompt evolution
+python3 forgesmith_gepa.py --dry-run
+
+# Backfill episode data from logs
+python3 forgesmith_backfill.py
+```
+
+---
+
+## Running Tests
+
+```bash
+# Run all tests
+python3 -m pytest tests/ -v
+
+# Run a specific test file
+python3 -m pytest tests/test_early_termination.py -v
+
+# Run tests without pytest (each file has a main())
+python3 tests/test_lesson_sanitizer.py
+python3 tests/test_loop_detection.py
+python3 tests/test_agent_messages.py
+python3 tests/test_agent_actions.py
+
+# Benchmark database migrations
+python3 tools/benchmark_migrations.py
+```
 
 ---
 
 ## Troubleshooting
 
-### Database issues
+### Database not found
 
-| Problem | Solution |
-|---|---|
-| `sqlite3.OperationalError: no such table` | Run `python3 db_migrate.py` to apply migrations |
-| `sqlite3.OperationalError: database is locked` | Another process has a write lock. Check for running ForgeSmith or dispatch processes: `ps aux \| grep python3` |
-| Migration fails | A backup is automatically created before each migration. Check for `*.backup.*` files next to your DB |
-| Need to verify migration state | `python3 benchmark_migrations.py` runs a full migration benchmark |
-
-### Agent execution issues
-
-| Problem | Solution |
-|---|---|
-| `claude: command not found` | Install Claude CLI and ensure it's on your `PATH` |
-| Agent times out | Default timeout varies by complexity. Check `get_role_turns()` in `forge_orchestrator.py`. Increase with `--max-turns` flag |
-| Agent stuck in loop | Loop detection is built-in (see `LoopDetector` class). Threshold defaults: warning at 3, terminate at 5 |
-| Monologue detection firing | Agent producing text-only responses without tool use. This is expected behavior — the agent is redirected after 3 consecutive text-only turns |
-| Early termination too aggressive | Adjust thresholds in the dispatch config file |
-
-### Ollama-specific issues
-
-| Problem | Solution |
-|---|---|
-| `Connection refused` to Ollama | Ensure Ollama is running: `ollama serve` or check `OLLAMA_BASE_URL` |
-| Model not found | List available models: `ollama list`. Pull needed model: `ollama pull <model>` |
-| Blocked command detected | `ollama_agent.py` has safety filters. Review `is_blocked_command()` for the blocklist |
-
-### ForgeSmith issues
-
-| Problem | Solution |
-|---|---|
-| `Not enough episodes for SIMBA` | Need minimum sample count. Run more agent tasks first |
-| GEPA prompt evolution rejected | Validation checks diff ratio and protected sections. Use `--dry-run` to preview |
-| Rollback needed | `python3 forgesmith.py --rollback <run_id>` |
-| Impact assessment missing | Run `python3 forgesmith_impact.py` to backfill the column |
-
-### General issues
-
-| Problem | Solution |
-|---|---|
-| `python3: command not found` | Install Python 3.10+ or use `python` instead of `python3` |
-| Permission denied on DB file | Check file permissions: `chmod 664 theforge.db` and ensure the running user owns it |
-| Tests failing | Run individual test files to isolate: `python3 test_loop_detection.py` |
-| Config file not found | Re-run `python3 equipa_setup.py` or check that config was generated in the expected path |
-| Backfill historical data | `python3 forgesmith_backfill.py` parses log files to populate episode data |
-| Port/process conflicts | EQUIPA doesn't bind to ports (no web server). Conflicts would be with Ollama (default 11434) |
-
-### Running the full test suite
-
-```bash
-python3 test_early_termination.py
-python3 test_early_termination_monologue.py
-python3 test_loop_detection.py
-python3 test_agent_messages.py
-python3 test_agent_actions.py
-python3 test_lesson_sanitizer.py
-python3 test_lessons_injection.py
-python3 test_episode_injection.py
-python3 test_task_type_routing.py
-python3 test_rubric_scoring.py
-python3 test_rubric_quality_scorer.py
-python3 test_forgesmith_simba.py
+```
+Error: Could not find equipa.db
 ```
 
-Or run them all at once:
+**Fix:** Run the setup wizard or set the path explicitly:
+```bash
+python3 equipa_setup.py
+# OR
+export EQUIPA_DB=/path/to/your/equipa.db
+```
+
+### Claude CLI not found
+
+```
+Error: claude command not found
+```
+
+**Fix:** Install the Claude CLI and ensure it's on your PATH:
+```bash
+# Verify installation
+which claude
+claude --version
+
+# If using API directly, ensure the key is set
+export ANTHROPIC_API_KEY=sk-ant-api03-...
+```
+
+### Database schema is outdated
+
+```
+Error: no such column: task_type
+```
+
+**Fix:** Run migrations:
+```bash
+python3 db_migrate.py
+```
+
+A backup is automatically created before each migration.
+
+### Port / process conflicts (Ollama)
+
+```
+Error: Connection refused to localhost:11434
+```
+
+**Fix:**
+```bash
+# Check if Ollama is running
+curl http://localhost:11434/api/tags
+
+# Start Ollama
+ollama serve
+
+# Or check health via the script
+python3 -c "from ollama_agent import check_ollama_health; print(check_ollama_health('http://localhost:11434'))"
+```
+
+### Permission denied on project directories
+
+```
+Error: Permission denied: /path/to/project/.git
+```
+
+**Fix:** Ensure the user running EQUIPA has read/write access to all project directories referenced in the database.
+```bash
+# Check ownership
+ls -la /path/to/project/
+
+# Fix if needed
+sudo chown -R $(whoami) /path/to/project/
+```
+
+### Agent stuck in infinite loop
+
+EQUIPA has built-in loop detection (monologue detection, tool loop detection, alternating pattern detection). If an agent is still stuck:
 
 ```bash
-for f in test_*.py; do echo "=== $f ===" && python3 "$f" && echo "PASS" || echo "FAIL"; done
+# Check loop detection thresholds in dispatch_config.json
+cat dispatch_config.json | python3 -c "import json,sys; c=json.load(sys.stdin); print(json.dumps(c.get('features',{}), indent=2))"
+
+# Manually kill a stuck task (sets status to 'failed')
+sqlite3 equipa.db "UPDATE tasks SET status='failed', result='Manually terminated' WHERE id=<task_id>;"
+```
+
+### Forgesmith rollback
+
+If Forgesmith made a bad change:
+```bash
+# List recent Forgesmith runs
+python3 forgesmith.py --report
+
+# Rollback a specific run
+python3 forgesmith.py --rollback <run-id>
+
+# Rollback autoresearch prompt changes
+python3 autoresearch_prompts.py --rollback
+```
+
+### Tests fail with "no such table"
+
+```bash
+# The test database may need initialization
+python3 db_migrate.py
+
+# Some tests create temporary databases — ensure /tmp is writable
+ls -la /tmp/
+```
+
+### "Too many API calls" / Rate limiting
+
+**Fix:** Adjust concurrency and cooldowns in `dispatch_config.json`:
+```json
+{
+  "max_parallel": 2,
+  "cooldown_seconds": 30
+}
+```
+
+---
+
+## Architecture Quick Reference
+
+```
+equipa/
+├── cli.py              # Entry point: python3 -m equipa.cli
+├── dispatch.py         # Task scoring, routing, parallel execution
+├── agent_runner.py     # Subprocess management for agent calls
+├── monitoring.py       # Loop detection, budget tracking
+├── lessons.py          # Lesson + episode injection (SIMBA rules)
+├── parsing.py          # Output parsing, reflection extraction
+├── tasks.py            # Task fetching, status updates
+├── db.py               # Database connection, schema management
+├── prompts.py          # Checkpoint context building
+├── security.py         # Skill integrity, content wrapping
+└── git_ops.py          # Language detection, repo setup
+
+forgesmith.py           # Self-improvement: analysis + changes
+forgesmith_simba.py     # Rule generation from episodes
+forgesmith_gepa.py      # Prompt evolution (GEPA/DSPy)
+forgesmith_impact.py    # Change impact assessment
+forgesmith_backfill.py  # Episode data backfill from logs
+nightly_review.py       # Portfolio status report
+db_migrate.py           # Schema migrations (v0→v4)
+equipa_setup.py         # Interactive setup wizard
 ```
 ---
 
 ## Related Documentation
 
-- [Readme](README.md)
 - [Architecture](ARCHITECTURE.md)
 - [Api](API.md)
 - [Contributing](CONTRIBUTING.md)
-

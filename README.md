@@ -1,330 +1,166 @@
-<h1 align="center">EQUIPA</h1>
+# EQUIPA
 
-<p align="center">
-  <strong>Your AI development team.</strong>
-</p>
+A multi-agent orchestrator for AI coding tasks. Tell it what you want in plain English, and it coordinates specialized agents to get it done.
 
-<p align="center">
-  <em>European Portuguese for "team" — a self-improving AI agent orchestrator that builds, reviews, tests, and secures your code.</em>
-</p>
+Built in pure Python. No dependencies to install.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/dependencies-zero-brightgreen" alt="Zero Dependencies">
-  <img src="https://img.shields.io/badge/license-Apache%202.0-orange" alt="Apache 2.0">
-  <img src="https://img.shields.io/badge/tests-280%2B-success" alt="280+ Tests">
-</p>
+## What It Does
 
----
+EQUIPA takes a task description from your project database, picks the right agent role (developer, tester, security reviewer, etc.), dispatches it, monitors progress, and iterates until the work passes tests. If an agent gets stuck, EQUIPA kills it and tries a different approach.
 
-Software development takes dedication, perseverance, and knowledge. No tool changes that. What Equipa does is multiply your productivity — it handles the repetitive, parallelizable parts of the workflow so you can focus on the hard problems that actually need a human brain.
+It's not magic. Agents still fail, get confused, and occasionally waste time reading code they should be writing. But EQUIPA catches those patterns and adapts — both within a task (early termination, retries) and across tasks (lessons learned, prompt evolution).
 
-You coordinate in natural language. Equipa breaks work into tasks, dispatches specialized AI agents, and iterates through dev-test loops. Developers write code, testers validate it, security reviewers audit it with [Trail of Bits](https://github.com/trailofbits/semgrep-rules) semgrep rules — in parallel, with persistent memory across sessions.
+## Top Features
 
-Then it gets better at its job. A [Karpathy-inspired](https://github.com/karpathy) autoresearch loop benchmarks agent performance, mutates prompts using OPRO-style optimization, and commits or reverts based on results. Your agents tomorrow are measurably better than your agents today. Set it on a nightly cron and it improves itself while you sleep.
+### 1. Dev-Test Iteration Loop
+Every coding task runs through a developer → tester cycle. If tests fail, the developer gets the failure context and tries again — up to 5 cycles. You don't babysit it.
 
-This is a productivity tool, not a magic wand. You still need to review the output, understand your codebase, and make the real decisions. Equipa just makes sure you're not doing the grunt work alone.
+### 2. Self-Improving Agents
+EQUIPA learns from every task it runs. Three systems work together:
+- **ForgeSmith** extracts lessons from failures and tunes configuration
+- **GEPA** evolves agent prompts through genetic optimization (validated at ICLR 2026)
+- **SIMBA** synthesizes rules from recurring failure patterns
 
----
+These systems also share data — lessons update the quality scores of past experiences, GEPA checks history before trying new prompt variants, and SIMBA rules influence which past experiences get surfaced for future tasks.
 
-## See It in Action
+### 3. Episodic Memory
+Every task outcome is stored as an episode with a quality score. When similar tasks come up, EQUIPA retrieves relevant past experiences and injects them into the agent's context. Agents build on what worked before and avoid repeating failures.
 
+### 4. Nine Specialized Roles
+`developer` · `tester` · `planner` · `evaluator` · `security-reviewer` · `frontend-designer` · `debugger` · `code-reviewer` · `integration-tester`
+
+Each role gets tailored prompts, skills, and turn budgets. A security reviewer thinks differently than a frontend designer.
+
+### 5. Git Worktree Isolation
+When running multiple tasks in parallel, each gets its own git branch via worktrees. Changes are isolated — one task can't break another. Successful work merges back to main automatically. Work in progress is still being refined — we're actively improving the merge reliability.
+
+### 6. Language-Aware Prompts
+EQUIPA detects your project's language (Python, TypeScript, Go, C#, Java, Rust, JavaScript) and injects language-specific best practices into agent prompts. Agents write idiomatic code for your stack without being told.
+
+### 7. Cost Controls
+Per-task budgets scale by complexity. Dynamic turn allocation. Real-time cost tracking. Agents that waste turns reading without writing get warned and eventually killed. You set the limits, EQUIPA enforces them.
+
+### 8. Anti-Compaction State Persistence
+Long tasks that fill the LLM context window don't lose progress. Agents maintain a state file on disk tracking what they've done and what's next. If context compacts mid-task, they read the state file and continue.
+
+### 9. Zero Dependencies
+Pure Python standard library. No pip install, no virtualenv, no dependency conflicts. Copy the folder, run the script. Works on any machine with Python 3.10+.
+
+## Quick Start
+
+```bash
+# Clone
+git clone https://github.com/sbknana/equipa.git
+cd equipa
+
+# Setup (interactive wizard)
+python equipa_setup.py
+
+# Run a single task
+python forge_orchestrator.py --task 42 --dev-test -y
+
+# Run tasks in parallel
+python forge_orchestrator.py --tasks 42,43,44 --dev-test -y
+
+# Auto-dispatch all pending work
+python forge_orchestrator.py --dispatch -y
+
+# Run self-improvement
+python forgesmith.py --auto
 ```
-You: "Build user authentication with Google OAuth"
-
-Equipa:
-  Planning: broke feature into 5 tasks with dependency graph
-  Tasks 1-3 dispatched in parallel (no dependencies)
-  Task 4 waiting on task 2 (needs routes)
-  Task 5 waiting on all (integration tests)
-
-  OAuth config            -> src/config/auth.ts
-  Login/callback routes   -> /auth/google, /auth/callback
-  Session middleware       -> signed cookies
-  Login UI component      -> Google branding guidelines
-  8 integration tests     -> all passing
-
-  "Want me to run a security review on the auth flow?"
-```
-
-```
-You: "Users are getting 500 errors on checkout"
-
-Equipa:
-  Dispatched debugger agent
-  Root cause: null pointer in calculateTotal() — discounted items with no original price
-  Dispatched developer agent -> fix applied
-  Dispatched tester agent -> 4 new edge case tests, all passing
-  Done.
-```
-
-```
-You: "Review the payment module for security issues"
-
-Equipa:
-  Dispatched security reviewer (Trail of Bits tooling)
-  MEDIUM: Session tokens not rotated after privilege escalation
-  LOW: CSRF token missing on logout endpoint
-  "Want me to create fix tasks for these?"
-```
-
-You direct. Equipa executes. You review and decide what ships.
-
----
-
-## What Makes Equipa Different
-
-Most agent frameworks promise you can build anything with a one-liner. That's not real. Equipa gives you a **development team** — with memory, specialization, and the ability to learn from its own mistakes. You still drive. It just means you're not driving alone.
-
-**It actually improves over time.** Every agent run is recorded as a structured episode. ForgeSmith analyzes failures, extracts lessons, and injects them into future prompts. GEPA evolves prompts using DSPy-style optimization. SIMBA generates behavioral rules from high-variance outcomes. Your agents tomorrow are better than your agents today.
-
-**It doesn't let agents spiral.** Loop detection catches stuck agents repeating the same failed action. Monologue detection kills agents that talk instead of using tools. Turn budgets scale with task complexity. Cost breakers prevent runaway spending. If an agent gets stuck, the system warns it — then terminates it.
-
-**Security isn't an afterthought.** Seven Trail of Bits security skills ship out of the box: static analysis (Semgrep + CodeQL), variant analysis, audit context building, differential review, fix validation, custom Semgrep rule creation, and dangerous API detection. Security reviews auto-dispatch after dev-test cycles.
-
----
-
-## Agent Roles
-
-| Role | What It Does |
-|------|-------------|
-| **Developer** | Writes code. Loads codebase navigation, implementation planning, and error recovery skills. |
-| **Tester** | Writes and runs tests. Validates developer output. Iterates in dev-test loops. |
-| **Security Reviewer** | Deep audit with 7 Trail of Bits skills. Static analysis, variant analysis, sharp-edge detection. |
-| **Code Reviewer** | Quality, patterns, best practices. Architecture-level feedback. |
-| **Debugger** | Investigates bugs with hypothesis-driven 5-step methodology. Traces root causes. |
-| **Planner** | Breaks complex features into task lists with dependency graphs. |
-| **Frontend Designer** | UI/UX focused development. |
-| **Evaluator** | Assesses implementations against requirements. |
-| **Integration Tester** | Tests how components work together across boundaries. |
-
-You can also [create custom agent roles](docs/CUSTOM_AGENTS.md) by dropping a `.md` file in `prompts/`.
-
----
-
-## Key Features
-
-### Dev-Test Loops
-Developer writes code, tester validates it. They iterate with compacted context from prior cycles until tests pass or budget runs out. This mirrors how human teams actually work.
-
-### Parallel Task Execution
-Independent tasks run simultaneously in isolated git worktrees. No filesystem conflicts. Merged branches are cleaned up; unmerged branches are preserved for manual recovery.
-
-### Persistent Memory
-Every agent run, test result, and lesson learned is stored in a 30+ table SQLite database. Agents automatically query past episodes, relevant lessons, and project context before starting work. The system builds institutional knowledge about *your* codebase.
-
-### Self-Improving Agents
-Three feedback mechanisms run continuously:
-- **Lessons** — Text patterns extracted from failures, injected into future prompts
-- **GEPA** — DSPy-style prompt evolution with A/B testing and automatic rollback
-- **SIMBA** — Behavioral rules generated from high-variance outcomes with effectiveness scoring
-
-### QLoRA Fine-Tuning
-Export your agent performance data and fine-tune local models on it. The Arena module runs automated stress tests and generates training data. Train with QLoRA/PEFT on consumer GPUs.
-
-### Anti-Paralysis Guardrails
-- **Loop detection** — Catches agents repeating the same failed action
-- **Monologue detection** — Kills agents that talk instead of using tools
-- **Alternating pattern detection** — Catches A-B-A-B oscillation
-- **Dynamic turn budgets** — Scale with task complexity (simple: 0.5x, epic: 2.0x)
-- **Cost breakers** — Hard spend limits per task
-
-### Security Pipeline
-Seven Trail of Bits security skills baked in:
-
-| Skill | Purpose |
-|-------|---------|
-| Static Analysis | Semgrep + CodeQL scanning |
-| Variant Analysis | Find similar vulnerabilities across codebase |
-| Audit Context Building | Understand security-relevant architecture |
-| Differential Review | Security impact of code changes |
-| Fix Review | Validate that security fixes actually fix the issue |
-| Semgrep Rule Creator | Generate custom rules for project-specific patterns |
-| Sharp-Edge Detection | Flag dangerous APIs and patterns |
-
-### Multi-Model Support
-Route tasks to different models based on role and complexity. Use Claude for complex work, local Ollama models for cost-sensitive tasks. Configurable per-role in `dispatch_config.json`.
-
-### Multi-Tool Compatibility
-Works with Claude Code, Roo Code, Cline, Cursor, Windsurf, and Continue.dev. The setup wizard auto-generates MCP configuration for your tool of choice.
-
----
 
 ## Architecture
 
 ```
-You describe what you want
-        |
-        v
-Equipa breaks it into tasks (with dependency graph)
-        |
-        v
-Dispatches specialized agents in parallel
-        |
-        v
-Dev-test loops iterate until code works
-        |
-        v
-Results scored, episodes recorded, lessons extracted
-        |
-        v
-ForgeSmith evolves prompts for next time
+equipa/                  # 21 modules (~280 lines each)
+├── cli.py               # Entry point and argument parsing
+├── dispatch.py           # Task scanning, scoring, parallel dispatch
+├── loops.py              # Dev-test iteration loop
+├── agent_runner.py       # Agent subprocess management and streaming
+├── prompts.py            # System prompt construction
+├── monitoring.py         # Stuck detection, loop detection, cost tracking
+├── db.py                 # Database connection and schema management
+├── tasks.py              # Task fetching and project context
+├── lessons.py            # Episodic memory, Q-values, SIMBA integration
+├── parsing.py            # Agent output parsing and compaction
+├── security.py           # Skill integrity verification, untrusted markers
+├── preflight.py          # Build checking, dependency installation
+├── checkpoints.py        # Task checkpointing for crash recovery
+├── messages.py           # Inter-agent messaging
+├── reflexion.py          # Failure classification and reflection
+├── manager.py            # Planner and evaluator agent coordination
+├── roles.py              # Role configuration and cost tracking
+├── constants.py          # Configuration constants
+├── git_ops.py            # Git operations and language detection
+├── output.py             # Logging and summary formatting
+└── config.py             # Config file loading
+
+prompts/                 # Agent role prompts
+├── _common.md            # Shared instructions for all agents
+├── developer.md          # Developer role prompt
+├── tester.md             # Tester role prompt
+├── ...                   # Other role prompts
+└── languages/            # Language-specific best practices
+    ├── python.md
+    ├── typescript.md
+    ├── go.md
+    └── ...
+
+skills/                  # Per-role skill libraries
+├── developer/
+├── tester/
+├── debugger/
+├── code-reviewer/
+└── security/             # 7 Trail of Bits security skills
+
+forgesmith.py            # Self-improvement engine
+forgesmith_gepa.py       # Genetic prompt evolution
+forgesmith_simba.py      # Rule synthesis from failure patterns
+forgesmith_impact.py     # Blast-radius assessment for changes
 ```
 
-Everything flows through a single SQLite database (30+ tables). No Redis. No message queues. No infrastructure overhead. One file you can back up with `cp`.
+## How It Works
 
-For the full architecture with Mermaid diagrams, see [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+1. You create tasks in a SQLite database (or use `--goal` to describe what you want)
+2. EQUIPA reads the task, loads project context, and picks the right agent role
+3. The agent runs as a subprocess (`claude -p` or Ollama) with a tailored system prompt
+4. EQUIPA monitors the agent's output in real-time — detecting stuck behavior, tool loops, and wasted turns
+5. After the developer finishes, a tester agent verifies the work
+6. If tests fail, the developer gets another cycle with failure context
+7. Successful work is committed and merged. Failed work is preserved for review.
+8. Every outcome is recorded as an episode for future learning
 
----
+## Requirements
 
-## Quick Start
+- Python 3.10+
+- Claude Code CLI (`claude`) or Ollama for local LLM support
+- SQLite (included in Python)
+- Git (for worktree isolation)
 
-### Prerequisites
+## Configuration
 
-| Tool | Install |
-|------|---------|
-| Python 3.10+ | [python.org](https://python.org) |
-| An MCP-compatible AI coding tool | Claude Code, Cursor, Roo Code, Cline, Windsurf, or Continue.dev |
-| git | [git-scm.com](https://git-scm.com) |
-| uvx / uv | [docs.astral.sh/uv](https://docs.astral.sh/uv) |
-
-You also need an LLM provider — Anthropic API key, Claude Pro/Max subscription, or local models via Ollama.
-
-### Install
+Copy the example files and edit:
 
 ```bash
-git clone https://github.com/sbknana/equipa.git
-cd equipa
-python equipa_setup.py
+cp .env.example .env
+cp dispatch_config.example.json dispatch_config.json
+cp forge_config.example.json forge_config.json
+cp mcp_config.example.json mcp_config.json
 ```
 
-The setup wizard handles everything: prerequisite checks, database creation, config generation, and MCP integration. Just answer the prompts.
+Or run the setup wizard: `python equipa_setup.py`
 
-### Your First Task
+## Current Limitations
 
-```bash
-# Open your AI coding tool in the Equipa directory
-claude
-
-# Then just talk to it:
-> "Add a new project called MyApp at ~/myapp"
-> "Create a task: set up the database schema"
-> "Work on that task"
-```
-
-Or use the CLI directly:
-
-```bash
-# Single agent
-python forge_orchestrator.py --task 1 -y
-
-# Dev + test loop (recommended)
-python forge_orchestrator.py --task 1 --dev-test -y
-
-# Goal-driven mode — describe the end state, Equipa plans the rest
-python forge_orchestrator.py --goal "Add dark mode with system preference detection" --goal-project 1
-
-# Auto-run — scan all projects, dispatch by priority
-python forge_orchestrator.py --auto-run -y
-
-# Dry run — see what would happen without executing
-python forge_orchestrator.py --task 1 --dry-run
-```
-
-For the full setup guide, see [QUICKSTART.md](docs/QUICKSTART.md).
-
----
-
-## How Self-Improvement Works
-
-```
-Agent completes a task
-        |
-        v
-Episode recorded (outcome, errors, reflection, files changed)
-        |
-        v
-ForgeSmith analyzes recent episodes
-        |
-        |-->  Extracts lessons from failures
-        |     (sanitized against prompt injection)
-        |
-        |-->  GEPA evolves role prompts
-        |     (DSPy-style optimization with A/B testing)
-        |
-        |-->  SIMBA generates behavioral rules
-        |     (from high-variance outcomes)
-        |
-        +-->  Impact assessment gates risky changes
-              (blast-radius analysis before applying mutations)
-        |
-        v
-Improved prompts + lessons injected into next run
-```
-
-Every lesson is sanitized before injection — stripping XML tags, role overrides, base64 payloads, and code blocks that could poison the learning pipeline. Changes above a risk threshold require manual approval.
-
-The result: agents that failed at a pattern last week won't fail at it the same way this week.
-
----
-
-## Tech Stack
-
-- **Pure Python** — Zero pip dependencies. stdlib only. Copy files and run.
-- **SQLite** — 30+ tables, single file, zero infrastructure.
-- **Claude API** — Primary LLM provider (Anthropic).
-- **Ollama** — Optional local model support for cost-sensitive tasks.
-- **Trail of Bits** — 7 security skills using Semgrep and CodeQL.
-- **QLoRA/PEFT** — Fine-tune local models on your own agent performance data.
-
----
-
-## Project Stats
-
-- **~7,000 lines** of orchestrator code
-- **280+ tests** covering loop detection, lesson injection, sanitization, scoring, and more
-- **30+ database tables** tracking every aspect of agent behavior
-- **12 test suites** validating core subsystems
-- **9 agent roles** with per-role skills, prompts, and turn budgets
-- **7 security skills** from Trail of Bits methodology
-- **Zero pip dependencies** — pure Python stdlib
-
----
-
-## Documentation
-
-| Doc | What It Covers |
-|-----|-------------|
-| [Architecture](docs/ARCHITECTURE.md) | System design, data flow, Mermaid diagrams, key decisions |
-| [Quick Start](docs/QUICKSTART.md) | Step-by-step getting started guide |
-| [User Guide](docs/USER_GUIDE.md) | Comprehensive usage documentation |
-| [Orchestrator](docs/ORCHESTRATOR.md) | CLI commands, flags, advanced usage |
-| [Custom Agents](docs/CUSTOM_AGENTS.md) | Create your own agent roles |
-| [Capabilities](docs/CAPABILITIES.md) | Deep dive: ForgeSmith, security pipeline, benchmarks |
-| [API Reference](docs/API.md) | Module-level API documentation |
-
----
-
-## Contributing
-
-Contributions welcome. If you're using AI coding tools to build software, this is for you.
-
-1. Fork the repo
-2. Create a branch (`git checkout -b feature/my-feature`)
-3. Make your changes
-4. Test with `--dry-run` to verify prompt generation
-5. Submit a PR
-
----
+- Agents still get stuck on complex tasks, especially when codebases are large. The early termination system catches this but it means some tasks need multiple attempts.
+- Git worktree merges work but occasionally need manual intervention for conflicts.
+- Self-improvement takes time to show results — it needs 20-30 task completions before patterns emerge.
+- The tester role depends on the project having a working test suite. No tests = no iteration loop.
 
 ## License
 
-[Apache License 2.0](LICENSE) — use it commercially, modify it, distribute it. Just include the license and attribution.
+MIT
 
----
+## Credits
 
-<p align="center">
-  <strong>Built by <a href="https://github.com/Forgeborn">Forgeborn</a></strong><br>
-  Vibe coded with Claude<br>
-  <em>&copy; 2026 Forgeborn</em>
-</p>
+Built by [Forgeborn](https://forgeborn.dev). Vibe coded with Claude.
