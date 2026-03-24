@@ -67,9 +67,14 @@ from equipa.constants import (
 
 # --- Checkpoints (equipa.checkpoints) ---
 from equipa.checkpoints import (
+    SOFT_CHECKPOINT_INTERVAL,
+    SOFT_CHECKPOINT_TEXT_LIMIT,
+    build_compaction_recovery_context,
     clear_checkpoints,
     load_checkpoint,
+    load_soft_checkpoint,
     save_checkpoint,
+    save_soft_checkpoint,
 )
 
 # --- Git Operations (equipa.git_ops) ---
@@ -136,6 +141,9 @@ from equipa.parsing import (
 
 # --- Monitoring (equipa.monitoring) ---
 from equipa.monitoring import (
+    COMPACTION_REINTRO_PHRASES,
+    COMPACTION_REPETITION_THRESHOLD,
+    COMPACTION_STALE_TOOL_TURNS,
     LOOP_TERMINATE_THRESHOLD,
     LOOP_WARNING_THRESHOLD,
     LoopDetector,
@@ -152,6 +160,7 @@ from equipa.monitoring import (
     _TOOL_SIG_KEY,
     adjust_dynamic_budget,
     calculate_dynamic_budget,
+    detect_compaction_signals,
 )
 
 # --- Database (equipa.db) ---
@@ -365,9 +374,14 @@ __all__ = [
     "TESTER_COMPACTION_THRESHOLD",
     "THEFORGE_DB",
     # Checkpoints
+    "SOFT_CHECKPOINT_INTERVAL",
+    "SOFT_CHECKPOINT_TEXT_LIMIT",
+    "build_compaction_recovery_context",
     "clear_checkpoints",
     "load_checkpoint",
+    "load_soft_checkpoint",
     "save_checkpoint",
+    "save_soft_checkpoint",
     # Git Operations
     "_get_repo_env",
     "_git_run",
@@ -419,6 +433,9 @@ __all__ = [
     "build_test_failure_context",
     "validate_output",
     # Monitoring
+    "COMPACTION_REINTRO_PHRASES",
+    "COMPACTION_REPETITION_THRESHOLD",
+    "COMPACTION_STALE_TOOL_TURNS",
     "LOOP_WARNING_THRESHOLD",
     "LOOP_TERMINATE_THRESHOLD",
     "_check_stuck_phrases",
@@ -435,6 +452,7 @@ __all__ = [
     "LoopDetector",
     "calculate_dynamic_budget",
     "adjust_dynamic_budget",
+    "detect_compaction_signals",
     # Database
     "get_db_connection",
     "ensure_schema",
