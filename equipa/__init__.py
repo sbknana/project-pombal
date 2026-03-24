@@ -306,6 +306,15 @@ from equipa.dispatch import (
     validate_goals,
 )
 
+# --- MCP Health (equipa.mcp_health) ---
+from equipa.mcp_health import (
+    DEFAULT_BACKOFF,
+    HEALTH_CACHE,
+    HEALTHY_TTL,
+    MAX_BACKOFF,
+    MCPHealthMonitor,
+)
+
 # --- CLI (equipa.cli) ---
 from equipa.cli import (
     _handle_add_project,
@@ -548,6 +557,12 @@ __all__ = [
     "run_parallel_goals",
     "parse_task_ids",
     "run_parallel_tasks",
+    # MCP Health
+    "HEALTH_CACHE",
+    "DEFAULT_BACKOFF",
+    "MAX_BACKOFF",
+    "HEALTHY_TTL",
+    "MCPHealthMonitor",
     # CLI
     "get_provider",
     "get_ollama_model",
