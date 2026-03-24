@@ -210,7 +210,7 @@ async def run_agent_streaming(
     # but never exceed 2x the base threshold (prevents overly generous scaling)
     effective_kill_turns = min(
         EARLY_TERM_KILL_TURNS * 2,
-        max(EARLY_TERM_KILL_TURNS, int((max_turns or EARLY_TERM_KILL_TURNS) * 0.4))
+        max(EARLY_TERM_KILL_TURNS, int((max_turns or EARLY_TERM_KILL_TURNS) * 0.2))
     )
     effective_final_warn_turns = max(EARLY_TERM_FINAL_WARN_TURNS, int(effective_kill_turns * 0.8))
     effective_warn_turns = max(EARLY_TERM_WARN_TURNS, int(effective_kill_turns * 0.5))
