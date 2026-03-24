@@ -81,14 +81,18 @@ def _ensure_full_schema():
 
 def pytest_configure(config):
     """Ensure database schema exists before any tests collect."""
-    import forge_orchestrator
+    try:
+        import forge_orchestrator
 
-    # Reset ensure_schema cache so it re-runs for test DB
-    forge_orchestrator._SCHEMA_ENSURED = False
-    forge_orchestrator.ensure_schema()
+        # Reset ensure_schema cache so it re-runs for test DB
+        forge_orchestrator._SCHEMA_ENSURED = False
+        forge_orchestrator.ensure_schema()
 
-    # Apply the full schema.sql for tables not covered by ensure_schema()
-    _ensure_full_schema()
+        # Apply the full schema.sql for tables not covered by ensure_schema()
+        _ensure_full_schema()
+    except (ImportError, ModuleNotFoundError) as e:
+        print(f"  [conftest] WARNING: could not import forge_orchestrator: {e}")
+        print("  [conftest] Schema setup skipped — tests requiring DB may fail.")
 
 
 def pytest_collection_modifyitems(session, config, items):
