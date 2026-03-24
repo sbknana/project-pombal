@@ -1866,17 +1866,15 @@ def format_lessons_for_injection(lessons, delimiter=None):
             safe_sig = sanitize_error_signature(lesson['error_signature'])
             lines.append(f"  (Error: {safe_sig}, seen {lesson['times_seen']}x)")
 
-    formatted = "\n".join(lines)
+    formatted = "## Lessons from Previous Runs\n\n" + "\n".join(lines)
 
     # Wrap in task-input tags so agents treat this as data (PM-24)
     wrapped = wrap_lessons_in_task_input(formatted)
 
     # Add unpredictable delimiter for defense-in-depth (EQ-24)
     if delimiter and wrapped:
-        header = "## Lessons from Previous Runs\n"
-        # The wrap_lessons_in_task_input already includes the header,
-        # so wrap the entire output with the delimiter
-        wrapped = f'<task-input type="lessons" trust="derived">\n{wrap_untrusted(wrapped, delimiter)}\n</task-input>'
+        # Re-wrap with delimiter markers around the already-tagged content
+        wrapped = f'<task-input type="lessons" trust="derived">\n{wrap_untrusted(formatted, delimiter)}\n</task-input>'
 
     return wrapped
 
