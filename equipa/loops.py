@@ -18,7 +18,13 @@ from equipa.agent_runner import (
     dispatch_agent,
     run_agent,
 )
-from equipa.checkpoints import clear_checkpoints, load_checkpoint, save_checkpoint
+from equipa.checkpoints import (
+    build_compaction_recovery_context,
+    clear_checkpoints,
+    load_checkpoint,
+    load_soft_checkpoint,
+    save_checkpoint,
+)
 from equipa.hooks import fire_async as fire_hook
 from equipa.constants import (
     COST_ESTIMATE_PER_TURN,
@@ -300,6 +306,25 @@ def _create_security_lessons(findings: list[tuple[str, str]], project_id: int | 
     return created
 
 
+def _load_forge_state_json(project_dir: str | None) -> dict | None:
+    """Load .forge-state.json from the project directory if it exists.
+
+    This file is maintained by agents during streaming to persist state
+    across context compactions. Returns the parsed dict or None.
+    """
+    if not project_dir:
+        return None
+    from pathlib import Path
+    state_file = Path(project_dir) / ".forge-state.json"
+    if not state_file.exists():
+        return None
+    try:
+        import json as _json
+        return _json.loads(state_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 async def run_dev_test_loop(
     task: dict[str, Any],
     project_dir: str,
@@ -565,9 +590,32 @@ async def run_dev_test_loop(
                         project_dir=project_dir, checkpoint_path=str(cp_path),
                     )
 
+            # Check for compaction signals from streaming
+            dev_compaction_count = dev_result.get("compaction_count", 0)
+            if dev_compaction_count > 0:
+                log(f"  [Compaction] {dev_compaction_count} compaction(s) "
+                    f"detected during streaming", output)
+
             if continuation_count < MAX_CONTINUATIONS:
                 log(f"  [Auto-Continue] Spawning new developer agent to continue...", output)
-                if result_text:
+
+                # Build enhanced continuation context with compaction recovery
+                if dev_compaction_count > 0:
+                    # Load soft checkpoint + .forge-state.json for richer context
+                    soft_cp = load_soft_checkpoint(task_id, role=task_role)
+                    forge_state = _load_forge_state_json(project_dir)
+
+                    if soft_cp:
+                        recovery_ctx = build_compaction_recovery_context(
+                            soft_cp, forge_state)
+                        compaction_history.append(recovery_ctx)
+                        log(f"  [Compaction] Injecting recovery context "
+                            f"from soft checkpoint + forge-state", output)
+                    elif result_text:
+                        checkpoint_context = build_checkpoint_context(
+                            result_text, prev_attempt + cycle)
+                        compaction_history.append(checkpoint_context)
+                elif result_text:
                     checkpoint_context = build_checkpoint_context(
                         result_text, prev_attempt + cycle)
                     compaction_history.append(checkpoint_context)
