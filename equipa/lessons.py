@@ -132,6 +132,21 @@ def update_lesson_injection_count(lesson_ids: list[int]) -> None:
 _injected_episodes_by_task: dict[int, list[int]] = {}
 
 
+def get_active_simba_rules():
+    """Load active SIMBA-synthesized rules from lessons_learned."""
+    try:
+        conn = get_db_connection()
+        rows = conn.execute(
+            """SELECT lesson, error_signature FROM lessons_learned
+               WHERE active = 1 AND (source = 'simba' OR source = 'forgesmith')
+               AND lesson IS NOT NULL AND lesson != ''"""
+        ).fetchall()
+        conn.close()
+        return [{"lesson": r["lesson"], "signature": r["error_signature"]} for r in rows]
+    except Exception:
+        return []
+
+
 def get_relevant_episodes(
     role: str,
     project_id: int,
@@ -162,6 +177,9 @@ def get_relevant_episodes(
         List of episode dicts with id, approach_summary, outcome, reflection, q_value
     """
     try:
+        # Load SIMBA rules once for scoring
+        _simba_rules = get_active_simba_rules()
+
         conn = get_db_connection()
         # Fetch more candidates than needed so we can re-rank
         fetch_limit = max(limit * 3, 10)
@@ -230,6 +248,24 @@ def get_relevant_episodes(
                 overlap = compute_keyword_overlap(task_description, ep_text)
                 # Boost score by up to 50% based on keyword overlap
                 score *= (1.0 + overlap * 0.5)
+
+            # SIMBA rule bonus: boost episodes that followed synthesized rules
+            if _simba_rules:
+                ep_text_lower = (
+                    (ep.get("approach_summary", "") or "")
+                    + " "
+                    + (ep.get("reflection", "") or "")
+                ).lower()
+                for rule in _simba_rules:
+                    # Check if episode mentions following this rule's key terms
+                    rule_keywords = set(rule["lesson"].lower().split())
+                    ep_keywords = set(ep_text_lower.split())
+                    keyword_match = len(rule_keywords & ep_keywords) / max(len(rule_keywords), 1)
+                    if keyword_match > 0.3:
+                        positive = ep.get("outcome", "") in ("tests_passed", "no_tests")
+                        if positive:
+                            score += 0.15  # Boost episodes that followed rules and succeeded
+                        break  # One rule match is enough
 
             ep["_relevance_score"] = score
 
