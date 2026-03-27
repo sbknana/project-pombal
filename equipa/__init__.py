@@ -315,6 +315,14 @@ from equipa.mcp_health import (
     MCPHealthMonitor,
 )
 
+# --- Routing (equipa.routing) ---
+from equipa.routing import (
+    auto_select_model,
+    record_model_outcome,
+    score_complexity,
+    select_model_by_complexity,
+)
+
 # --- MCP Server (equipa.mcp_server) ---
 from equipa.mcp_server import (
     run_server,
@@ -568,6 +576,11 @@ __all__ = [
     "MAX_BACKOFF",
     "HEALTHY_TTL",
     "MCPHealthMonitor",
+    # Routing
+    "auto_select_model",
+    "record_model_outcome",
+    "score_complexity",
+    "select_model_by_complexity",
     # MCP Server
     "run_server",
     # CLI
