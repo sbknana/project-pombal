@@ -8,6 +8,7 @@ Copyright 2026 Forgeborn
 
 from __future__ import annotations
 
+import math
 import random
 from collections import defaultdict
 
@@ -112,7 +113,6 @@ def create_similarity_edges(
         Number of edges created
     """
     import json
-    import math
 
     conn = get_db_connection()
     rows = conn.execute(
