@@ -70,10 +70,9 @@ def write_skill_manifest() -> dict:
 def verify_skill_integrity() -> bool:
     """Verify all prompt and skill files match known-good SHA-256 hashes.
 
-    Returns True if verification passes (or manifest is missing/stale).
-    Auto-regenerates the manifest when changes are detected from the
-    orchestrator (not from agents), since the security value is in
-    logging what changed, not in blocking legitimate updates.
+    Returns True if verification passes, False if files are tampered/missing.
+    Auto-regenerates the manifest only when the manifest file itself is
+    missing or corrupt, not when the skill files have changed.
     """
     if not SKILL_MANIFEST_FILE.exists():
         print("WARNING: skill_manifest.json not found — auto-generating")
@@ -107,17 +106,16 @@ def verify_skill_integrity() -> bool:
             mismatches.append(rel_path)
 
     if missing:
-        print(f"NOTICE: Skill integrity — {len(missing)} file(s) removed since last manifest:")
+        print(f"ERROR: Skill integrity — {len(missing)} file(s) missing:")
         for f in missing:
-            print(f"  REMOVED: {f}")
+            print(f"  MISSING: {f}")
 
     if mismatches:
-        print(f"NOTICE: Skill integrity — {len(mismatches)} file(s) updated since last manifest:")
+        print(f"ERROR: Skill integrity — {len(mismatches)} file(s) tampered:")
         for f in mismatches:
-            print(f"  UPDATED: {f}")
+            print(f"  TAMPERED: {f}")
 
     if missing or mismatches:
-        print("Auto-regenerating skill manifest...")
-        write_skill_manifest()
+        return False
 
     return True
