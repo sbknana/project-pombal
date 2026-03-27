@@ -247,6 +247,11 @@ async def _post_task_telemetry(
     await maybe_run_reflexion(task, result, outcome, role=role, output=output)
     update_injected_episode_q_values_for_task(task["id"], outcome, output=output)
 
+    # Record model outcome for circuit breaker (cost routing)
+    from equipa.routing import record_model_outcome
+    success = outcome in ("tests_passed", "no_tests")
+    record_model_outcome(model, success)
+
 
 # --- Main Entry Points ---
 

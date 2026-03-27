@@ -78,7 +78,9 @@ def get_role_model(
       3. CLI --model
       4. dispatch config global model
       5. DEFAULT_ROLE_MODELS
+      6. auto-routing (if auto_model_routing feature flag enabled)
     """
+    from equipa.dispatch import is_feature_enabled
     from equipa.tasks import get_task_complexity
 
     effective_config = config or getattr(args, "dispatch_config", None)
@@ -105,6 +107,13 @@ def get_role_model(
     # Config global model
     if effective_config and "model" in effective_config:
         return effective_config["model"]
+
+    # Priority 6: Auto-routing (late import, gated by feature flag)
+    if effective_config and task and is_feature_enabled(effective_config, "auto_model_routing"):
+        from equipa.routing import auto_select_model
+        routed_model = auto_select_model(task, effective_config)
+        if routed_model:
+            return routed_model
 
     return DEFAULT_ROLE_MODELS.get(role, DEFAULT_MODEL)
 
