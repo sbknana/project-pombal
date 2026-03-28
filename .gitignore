@@ -124,3 +124,9 @@ MONOLITH-SPLIT-PLAN.md
 ECC-IMPLEMENTATION-PLAN.md
 docs-config.json
 tmp-*.md
+
+# Generated files
+project-manifest.json
+skill_manifest.json
+docs-config.json
+docs/html/
