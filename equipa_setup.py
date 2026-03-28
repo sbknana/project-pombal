@@ -205,7 +205,12 @@ def step_install_path():
     """Prompt user for the installation directory."""
     print_header("Step 2: Install Path")
 
-    default_base = str(Path.home() / "Equipa")
+    # If running from inside a cloned EQUIPA repo, default to that directory
+    cwd = Path.cwd()
+    if (cwd / "equipa_setup.py").exists() or (cwd / "equipa" / "__init__.py").exists():
+        default_base = str(cwd)
+    else:
+        default_base = str(Path.home() / "Equipa")
 
     base_dir = prompt_input("Install directory", default=default_base)
     base_path = Path(base_dir).resolve()
