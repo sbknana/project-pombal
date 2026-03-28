@@ -70,7 +70,7 @@ def test_graph_reranking_in_episode_retrieval(clean_db):
     graph.add_edge(ep_ids[1], ep_ids[2], "coaccessed", 1.0)
 
     # Fetch with knowledge_graph enabled
-    config = {"knowledge_graph": True}
+    config = {"features": {"knowledge_graph": True}}
     episodes = get_relevant_episodes(
         role="developer",
         project_id=23,
@@ -106,7 +106,7 @@ def test_graph_disabled_uses_standard_ranking(clean_db):
     conn.close()
 
     # Fetch with knowledge_graph disabled
-    config = {"knowledge_graph": False}
+    config = {"features": {"knowledge_graph": False}}
     episodes = get_relevant_episodes(
         role="developer",
         project_id=23,
@@ -142,7 +142,7 @@ def test_coaccessed_edges_created_on_q_value_update(clean_db):
     _injected_episodes_by_task[200] = ep_ids
 
     # Update q-values with knowledge_graph enabled
-    config = {"knowledge_graph": True}
+    config = {"features": {"knowledge_graph": True}}
     update_injected_episode_q_values_for_task(
         task_id=200,
         outcome="tests_passed",
@@ -180,7 +180,7 @@ def test_coaccessed_edges_not_created_when_disabled(clean_db):
     _injected_episodes_by_task[201] = ep_ids
 
     # Update q-values with knowledge_graph disabled
-    config = {"knowledge_graph": False}
+    config = {"features": {"knowledge_graph": False}}
     update_injected_episode_q_values_for_task(
         task_id=201,
         outcome="tests_passed",
@@ -227,7 +227,7 @@ def test_similarity_edges_created_on_lesson_embedding(clean_db):
 
     with patch("equipa.embeddings.get_embedding", side_effect=mock_get_embedding):
         # Embed lesson 1 (no edges yet)
-        config = {"knowledge_graph": True}
+        config = {"features": {"knowledge_graph": True}}
         result1 = embed_and_store_lesson(l1, "Lesson A text", config)
         assert result1 is True
 
@@ -259,7 +259,7 @@ def test_similarity_edges_not_created_when_disabled(clean_db):
     # Mock Ollama to return embedding
     with patch("equipa.embeddings.get_embedding", return_value=[0.5, 0.5, 0.0]):
         # Embed with knowledge_graph disabled
-        config = {"knowledge_graph": False}
+        config = {"features": {"knowledge_graph": False}}
         result = embed_and_store_lesson(lx, "Lesson X text", config)
         assert result is True
 
@@ -308,10 +308,12 @@ def test_coaccessed_edges_in_prompt_building(clean_db):
     # Build system prompt with knowledge_graph enabled
     task = {"id": 1001, "project_id": 23, "title": "Test Task", "description": "Test desc", "task_type": "feature"}
     config = {
-        "knowledge_graph": True,
-        "forgesmith_episodes": True,
-        "forgesmith_lessons": False,
-        "language_prompts": False,
+        "features": {
+            "knowledge_graph": True,
+            "forgesmith_episodes": True,
+            "forgesmith_lessons": False,
+            "language_prompts": False,
+        }
     }
     project_context = {}
 
@@ -335,7 +337,7 @@ def test_coaccessed_edges_in_prompt_building(clean_db):
 def test_graph_gracefully_handles_empty_adjacency():
     """Test that graph ranking handles empty adjacency lists gracefully."""
     # Empty adjacency → no PageRank scores → falls back to standard ranking
-    config = {"knowledge_graph": True}
+    config = {"features": {"knowledge_graph": True}}
     episodes = get_relevant_episodes(
         role="nonexistent",
         project_id=999,
@@ -365,7 +367,7 @@ def test_graph_handles_import_failure(clean_db):
     # Mock import to fail
     import sys
     with patch.dict('sys.modules', {'equipa.graph': None}):
-        config = {"knowledge_graph": True}
+        config = {"features": {"knowledge_graph": True}}
         episodes = get_relevant_episodes(
             role="developer",
             project_id=23,
@@ -412,7 +414,7 @@ def test_pagerank_boost_overrides_low_qvalue(clean_db):
     conn.close()
 
     # Fetch with knowledge_graph enabled
-    config = {"knowledge_graph": True}
+    config = {"features": {"knowledge_graph": True}}
     episodes = get_relevant_episodes(
         role="developer",
         project_id=23,
