@@ -398,9 +398,8 @@ def test_pagerank_boost_overrides_low_qvalue(clean_db):
            (task_id, role, project_id, approach_summary, reflection, q_value, outcome, turns_used)
            VALUES (102, 'developer', 23, 'Low quality', 'Weak reflection', 0.4, 'tests_passed', 10)"""
     ).lastrowid
-    conn.commit()
-
-    # Create strong graph edges pointing to episode 2 (giving it high PageRank)
+    # Insert pointer episodes
+    pointer_ids = []
     for i in range(3, 8):  # 5 episodes pointing to episode 2
         epi = conn.execute(
             """INSERT INTO agent_episodes
@@ -408,10 +407,14 @@ def test_pagerank_boost_overrides_low_qvalue(clean_db):
                VALUES (?, 'developer', 23, 'Pointer', 'Reflection', 0.5, 'tests_passed', 10)""",
             (100 + i,),
         ).lastrowid
-        graph.add_edge(epi, ep2, "coaccessed", 1.0)
+        pointer_ids.append(epi)
 
     conn.commit()
     conn.close()
+
+    # Create strong graph edges pointing to episode 2 (giving it high PageRank)
+    for epi in pointer_ids:
+        graph.add_edge(epi, ep2, "coaccessed", 1.0)
 
     # Fetch with knowledge_graph enabled
     config = {"features": {"knowledge_graph": True}}

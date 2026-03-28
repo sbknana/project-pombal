@@ -98,7 +98,7 @@ def embed_and_store_lesson(
         conn = sqlite3.connect(str(THEFORGE_DB))
         try:
             conn.execute(
-                "UPDATE lessons SET embedding = ? WHERE id = ?",
+                "UPDATE lessons_learned SET embedding = ? WHERE id = ?",
                 (json.dumps(embedding), lesson_id),
             )
             conn.commit()
@@ -156,7 +156,7 @@ def embed_and_store_episode(
         conn = sqlite3.connect(str(THEFORGE_DB))
         try:
             conn.execute(
-                "UPDATE episodes SET embedding = ? WHERE id = ?",
+                "UPDATE agent_episodes SET embedding = ? WHERE id = ?",
                 (json.dumps(embedding), episode_id),
             )
             conn.commit()
