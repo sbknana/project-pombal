@@ -51,20 +51,23 @@ def test_graph_reranking_in_episode_retrieval(clean_db):
     conn = get_db_connection(write=True)
 
     # Create 3 episodes with identical base q_values
+    ep_ids = []
     for i in range(1, 4):
-        conn.execute(
+        cursor = conn.execute(
             """INSERT INTO agent_episodes
                (task_id, role, task_type, project_id, approach_summary, reflection,
                 q_value, outcome, turns_used)
                VALUES (?, 'developer', 'feature', 23, ?, ?, 0.5, 'tests_passed', 10)""",
             (100 + i, f"Approach {i}", f"Reflection {i}"),
         )
+        ep_ids.append(cursor.lastrowid)
     conn.commit()
+    conn.close()
 
     # Create graph edges giving episode 3 highest PageRank
     # Episode 1 -> 3, Episode 2 -> 3 (3 has in-degree 2)
-    graph.add_edge(1, 3, "coaccessed", 1.0)
-    graph.add_edge(2, 3, "coaccessed", 1.0)
+    graph.add_edge(ep_ids[0], ep_ids[2], "coaccessed", 1.0)
+    graph.add_edge(ep_ids[1], ep_ids[2], "coaccessed", 1.0)
 
     # Fetch with knowledge_graph enabled
     config = {"knowledge_graph": True}
@@ -77,11 +80,9 @@ def test_graph_reranking_in_episode_retrieval(clean_db):
         dispatch_config=config,
     )
 
-    conn.close()
-
     # Episode 3 should rank first due to PageRank boost
     assert len(episodes) == 3
-    assert episodes[0]["id"] == 3, "Episode 3 should rank first (highest PageRank)"
+    assert episodes[0]["id"] == ep_ids[2], "Episode 3 should rank first (highest PageRank)"
 
 
 def test_graph_disabled_uses_standard_ranking(clean_db):
@@ -89,19 +90,20 @@ def test_graph_disabled_uses_standard_ranking(clean_db):
     conn = get_db_connection(write=True)
 
     # Create episodes with different q_values
-    conn.execute(
+    ep1 = conn.execute(
         """INSERT INTO agent_episodes
            (task_id, role, task_type, project_id, approach_summary, reflection,
             q_value, outcome, turns_used)
            VALUES (101, 'developer', 'feature', 23, 'Low quality', 'Reflection', 0.3, 'tests_passed', 10)"""
-    )
-    conn.execute(
+    ).lastrowid
+    ep2 = conn.execute(
         """INSERT INTO agent_episodes
            (task_id, role, task_type, project_id, approach_summary, reflection,
             q_value, outcome, turns_used)
            VALUES (102, 'developer', 'feature', 23, 'High quality', 'Reflection', 0.9, 'tests_passed', 10)"""
-    )
+    ).lastrowid
     conn.commit()
+    conn.close()
 
     # Fetch with knowledge_graph disabled
     config = {"knowledge_graph": False}
@@ -114,11 +116,9 @@ def test_graph_disabled_uses_standard_ranking(clean_db):
         dispatch_config=config,
     )
 
-    conn.close()
-
     # Episode 2 (higher q_value) should rank first
     assert len(episodes) == 2
-    assert episodes[0]["id"] == 2, "Episode 2 should rank first (higher q_value)"
+    assert episodes[0]["id"] == ep2, "Episode 2 should rank first (higher q_value)"
 
 
 def test_coaccessed_edges_created_on_q_value_update(clean_db):
@@ -126,18 +126,20 @@ def test_coaccessed_edges_created_on_q_value_update(clean_db):
     conn = get_db_connection(write=True)
 
     # Create 3 episodes
+    ep_ids = []
     for i in range(1, 4):
-        conn.execute(
+        cursor = conn.execute(
             """INSERT INTO agent_episodes
                (task_id, role, project_id, approach_summary, reflection, q_value, outcome, turns_used)
                VALUES (?, 'developer', 23, ?, ?, 0.5, 'tests_passed', 10)""",
             (100 + i, f"Approach {i}", f"Reflection {i}"),
         )
+        ep_ids.append(cursor.lastrowid)
     conn.commit()
     conn.close()
 
     # Simulate episode injection tracking
-    _injected_episodes_by_task[200] = [1, 2, 3]
+    _injected_episodes_by_task[200] = ep_ids
 
     # Update q-values with knowledge_graph enabled
     config = {"knowledge_graph": True}
@@ -162,18 +164,20 @@ def test_coaccessed_edges_not_created_when_disabled(clean_db):
     conn = get_db_connection(write=True)
 
     # Create 2 episodes
+    ep_ids = []
     for i in range(1, 3):
-        conn.execute(
+        cursor = conn.execute(
             """INSERT INTO agent_episodes
                (task_id, role, project_id, approach_summary, reflection, q_value, outcome, turns_used)
                VALUES (?, 'developer', 23, ?, ?, 0.5, 'tests_passed', 10)""",
             (100 + i, f"Approach {i}", f"Reflection {i}"),
         )
+        ep_ids.append(cursor.lastrowid)
     conn.commit()
     conn.close()
 
     # Simulate episode injection tracking
-    _injected_episodes_by_task[201] = [1, 2]
+    _injected_episodes_by_task[201] = ep_ids
 
     # Update q-values with knowledge_graph disabled
     config = {"knowledge_graph": False}
@@ -197,14 +201,14 @@ def test_similarity_edges_created_on_lesson_embedding(clean_db):
     conn = get_db_connection(write=True)
 
     # Create 2 lessons
-    conn.execute(
+    l1 = conn.execute(
         """INSERT INTO lessons_learned (lesson, error_signature, times_seen, active)
            VALUES ('Lesson A', 'error_a', 1, 1)"""
-    )
-    conn.execute(
+    ).lastrowid
+    l2 = conn.execute(
         """INSERT INTO lessons_learned (lesson, error_signature, times_seen, active)
            VALUES ('Lesson B', 'error_b', 1, 1)"""
-    )
+    ).lastrowid
     conn.commit()
     conn.close()
 
@@ -224,11 +228,11 @@ def test_similarity_edges_created_on_lesson_embedding(clean_db):
     with patch("equipa.embeddings.get_embedding", side_effect=mock_get_embedding):
         # Embed lesson 1 (no edges yet)
         config = {"knowledge_graph": True}
-        result1 = embed_and_store_lesson(1, "Lesson A text", config)
+        result1 = embed_and_store_lesson(l1, "Lesson A text", config)
         assert result1 is True
 
         # Embed lesson 2 (should create similarity edge to lesson 1)
-        result2 = embed_and_store_lesson(2, "Lesson B text", config)
+        result2 = embed_and_store_lesson(l2, "Lesson B text", config)
         assert result2 is True
 
     # Check that similarity edges were created
@@ -245,10 +249,10 @@ def test_similarity_edges_not_created_when_disabled(clean_db):
     conn = get_db_connection(write=True)
 
     # Create 1 lesson
-    conn.execute(
+    lx = conn.execute(
         """INSERT INTO lessons_learned (lesson, error_signature, times_seen, active)
            VALUES ('Lesson X', 'error_x', 1, 1)"""
-    )
+    ).lastrowid
     conn.commit()
     conn.close()
 
@@ -256,7 +260,7 @@ def test_similarity_edges_not_created_when_disabled(clean_db):
     with patch("equipa.embeddings.get_embedding", return_value=[0.5, 0.5, 0.0]):
         # Embed with knowledge_graph disabled
         config = {"knowledge_graph": False}
-        result = embed_and_store_lesson(1, "Lesson X text", config)
+        result = embed_and_store_lesson(lx, "Lesson X text", config)
         assert result is True
 
     # Check that NO similarity edges were created
@@ -271,23 +275,33 @@ def test_coaccessed_edges_in_prompt_building(clean_db):
     """Test that co-accessed edges are created during prompt building."""
     conn = get_db_connection(write=True)
 
-    # Create project and task
-    conn.execute(
-        """INSERT INTO projects (id, name, path) VALUES (23, 'Test Project', '/test')"""
-    )
-    conn.execute(
-        """INSERT INTO tasks (id, project_id, title, description, status)
-           VALUES (1001, 23, 'Test Task', 'Test description', 'in_progress')"""
-    )
+    # Create project (if not exists)
+    try:
+        conn.execute(
+            """INSERT INTO projects (id, name, path) VALUES (23, 'Test Project', '/test')"""
+        )
+    except:
+        pass  # Project already exists
+
+    # Create task (if not exists)
+    try:
+        conn.execute(
+            """INSERT INTO tasks (id, project_id, title, description, status)
+               VALUES (1001, 23, 'Test Task', 'Test description', 'in_progress')"""
+        )
+    except:
+        pass  # Task already exists
 
     # Create 2 episodes for injection
+    ep_ids = []
     for i in range(1, 3):
-        conn.execute(
+        cursor = conn.execute(
             """INSERT INTO agent_episodes
                (task_id, role, project_id, approach_summary, reflection, q_value, outcome, turns_used)
                VALUES (?, 'developer', 23, ?, ?, 0.6, 'tests_passed', 10)""",
             (100 + i, f"Approach {i}", f"Reflection {i}"),
         )
+        ep_ids.append(cursor.lastrowid)
     conn.commit()
     conn.close()
 
@@ -340,16 +354,17 @@ def test_graph_handles_import_failure(clean_db):
     conn = get_db_connection(write=True)
 
     # Create 1 episode
-    conn.execute(
+    ep1 = conn.execute(
         """INSERT INTO agent_episodes
            (task_id, role, project_id, approach_summary, reflection, q_value, outcome, turns_used)
            VALUES (101, 'developer', 23, 'Approach', 'Reflection', 0.5, 'tests_passed', 10)"""
-    )
+    ).lastrowid
     conn.commit()
     conn.close()
 
-    # Mock graph module to raise ImportError
-    with patch("equipa.lessons.graph", side_effect=ImportError("Graph not available")):
+    # Mock import to fail
+    import sys
+    with patch.dict('sys.modules', {'equipa.graph': None}):
         config = {"knowledge_graph": True}
         episodes = get_relevant_episodes(
             role="developer",
@@ -362,7 +377,7 @@ def test_graph_handles_import_failure(clean_db):
 
     # Should return episodes using standard ranking (no crash)
     assert len(episodes) == 1
-    assert episodes[0]["id"] == 1
+    assert episodes[0]["id"] == ep1
 
 
 def test_pagerank_boost_overrides_low_qvalue(clean_db):
@@ -370,29 +385,30 @@ def test_pagerank_boost_overrides_low_qvalue(clean_db):
     conn = get_db_connection(write=True)
 
     # Episode 1: high q_value, no graph edges
-    conn.execute(
+    ep1 = conn.execute(
         """INSERT INTO agent_episodes
            (task_id, role, project_id, approach_summary, reflection, q_value, outcome, turns_used)
            VALUES (101, 'developer', 23, 'High quality', 'Great reflection', 0.9, 'tests_passed', 10)"""
-    )
+    ).lastrowid
     # Episode 2: low q_value, but highly connected in graph
-    conn.execute(
+    ep2 = conn.execute(
         """INSERT INTO agent_episodes
            (task_id, role, project_id, approach_summary, reflection, q_value, outcome, turns_used)
            VALUES (102, 'developer', 23, 'Low quality', 'Weak reflection', 0.4, 'tests_passed', 10)"""
-    )
+    ).lastrowid
     conn.commit()
 
     # Create strong graph edges pointing to episode 2 (giving it high PageRank)
     for i in range(3, 8):  # 5 episodes pointing to episode 2
-        conn.execute(
+        epi = conn.execute(
             """INSERT INTO agent_episodes
                (task_id, role, project_id, approach_summary, reflection, q_value, outcome, turns_used)
                VALUES (?, 'developer', 23, 'Pointer', 'Reflection', 0.5, 'tests_passed', 10)""",
             (100 + i,),
-        )
-        graph.add_edge(i, 2, "coaccessed", 1.0)
+        ).lastrowid
+        graph.add_edge(epi, ep2, "coaccessed", 1.0)
 
+    conn.commit()
     conn.close()
 
     # Fetch with knowledge_graph enabled
@@ -409,7 +425,7 @@ def test_pagerank_boost_overrides_low_qvalue(clean_db):
     # Episode 2 (low q_value but high PageRank) should rank higher than without graph
     # It may not be #1 (70% similarity, 30% graph) but should be in top 3
     top_3_ids = [ep["id"] for ep in episodes[:3]]
-    assert 2 in top_3_ids, "Episode 2 should be in top 3 due to PageRank boost"
+    assert ep2 in top_3_ids, "Episode 2 should be in top 3 due to PageRank boost"
 
 
 def test_edge_weight_affects_pagerank():
