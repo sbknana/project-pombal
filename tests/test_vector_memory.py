@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import tempfile
 import unittest.mock as mock
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 
-from equipa.constants import THEFORGE_DB
 from equipa.db import ensure_schema, get_db_connection
 from equipa.embeddings import (
     cosine_similarity,
@@ -24,6 +25,40 @@ from equipa.embeddings import (
     get_embedding,
 )
 from equipa.lessons import get_relevant_episodes, record_agent_episode
+
+
+@pytest.fixture(scope="module")
+def test_db():
+    """Create a temporary test database for all tests."""
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        test_db_path = Path(f.name)
+
+    # Monkey-patch THEFORGE_DB to point to test database
+    import equipa.constants
+    original_db = equipa.constants.THEFORGE_DB
+    equipa.constants.THEFORGE_DB = test_db_path
+
+    # Also patch in other modules
+    import equipa.db
+    import equipa.embeddings
+    import equipa.lessons
+    equipa.db.THEFORGE_DB = test_db_path
+    equipa.embeddings.THEFORGE_DB = test_db_path
+    equipa.lessons.THEFORGE_DB = test_db_path
+
+    ensure_schema()
+
+    yield test_db_path
+
+    # Restore original DB path
+    equipa.constants.THEFORGE_DB = original_db
+    equipa.db.THEFORGE_DB = original_db
+    equipa.embeddings.THEFORGE_DB = original_db
+    equipa.lessons.THEFORGE_DB = original_db
+
+    # Clean up test database
+    if test_db_path.exists():
+        test_db_path.unlink()
 
 
 class TestCosineSimilarity:
@@ -75,9 +110,8 @@ class TestGetRelevantEpisodesVectorMemoryOff:
     """Test get_relevant_episodes falls back to keyword scoring when vector_memory is OFF."""
 
     @pytest.fixture(autouse=True)
-    def setup_db(self):
+    def setup_db(self, test_db):
         """Set up test database with sample episodes."""
-        ensure_schema()
         conn = get_db_connection(write=True)
 
         # Clear existing episodes
@@ -136,9 +170,8 @@ class TestGetRelevantEpisodesVectorMemoryOn:
     """Test get_relevant_episodes with vector memory enabled returns boosted scores."""
 
     @pytest.fixture(autouse=True)
-    def setup_db(self):
+    def setup_db(self, test_db):
         """Set up test database with episodes and mock embeddings."""
-        ensure_schema()
         conn = get_db_connection(write=True)
 
         conn.execute("DELETE FROM agent_episodes")
@@ -192,9 +225,8 @@ class TestRecordAgentEpisodeEmbedding:
     """Test record_agent_episode calls embedding on success and handles Ollama-down."""
 
     @pytest.fixture(autouse=True)
-    def setup_db(self):
+    def setup_db(self, test_db):
         """Set up clean database."""
-        ensure_schema()
         conn = get_db_connection(write=True)
         conn.execute("DELETE FROM agent_episodes")
         conn.commit()
@@ -286,9 +318,8 @@ class TestEndToEndVectorMemory:
     """End-to-end test: insert episode with embedding, retrieve with similar query."""
 
     @pytest.fixture(autouse=True)
-    def setup_db(self):
+    def setup_db(self, test_db):
         """Set up clean database."""
-        ensure_schema()
         conn = get_db_connection(write=True)
         conn.execute("DELETE FROM agent_episodes")
         conn.commit()
@@ -446,9 +477,8 @@ class TestFindSimilarByEmbedding:
     """Test find_similar_by_embedding with mock Ollama responses."""
 
     @pytest.fixture(autouse=True)
-    def setup_db(self):
+    def setup_db(self, test_db):
         """Set up database with multiple episodes with embeddings."""
-        ensure_schema()
         conn = get_db_connection(write=True)
         conn.execute("DELETE FROM agent_episodes")
 
