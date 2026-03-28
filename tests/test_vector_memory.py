@@ -163,7 +163,7 @@ class TestGetRelevantEpisodesVectorMemoryOff:
 class TestGetRelevantEpisodesVectorMemoryOn:
     """Test get_relevant_episodes with vector_memory enabled."""
 
-    @mock.patch("equipa.lessons.find_similar_by_embedding")
+    @mock.patch("equipa.embeddings.find_similar_by_embedding")
     def test_vector_memory_boosts_similar_episodes(
         self, mock_find_similar, test_db
     ):
@@ -197,7 +197,7 @@ class TestGetRelevantEpisodesVectorMemoryOn:
 class TestRecordAgentEpisodeEmbedding:
     """Test that record_agent_episode calls get_embedding when appropriate."""
 
-    @mock.patch("equipa.lessons.get_embedding")
+    @mock.patch("equipa.embeddings.get_embedding")
     def test_embedding_called_on_success_with_vector_memory_on(
         self, mock_get_embedding, test_db
     ):
@@ -223,7 +223,7 @@ class TestRecordAgentEpisodeEmbedding:
         # get_embedding should have been called
         mock_get_embedding.assert_called_once()
 
-    @mock.patch("equipa.lessons.get_embedding")
+    @mock.patch("equipa.embeddings.get_embedding")
     def test_embedding_not_called_with_vector_memory_off(
         self, mock_get_embedding, test_db
     ):
@@ -246,7 +246,7 @@ class TestRecordAgentEpisodeEmbedding:
         # get_embedding should NOT have been called
         mock_get_embedding.assert_not_called()
 
-    @mock.patch("equipa.lessons.embed_and_store_episode")
+    @mock.patch("equipa.embeddings.embed_and_store_episode")
     def test_embedding_failure_does_not_block_recording(
         self, mock_embed, test_db
     ):
