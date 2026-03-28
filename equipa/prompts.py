@@ -242,6 +242,22 @@ def build_system_prompt(
                 _injected_episodes_by_task[task_id] = ep_ids
                 update_episode_injection_count(ep_ids)
 
+                # Create co-accessed edges in knowledge graph (if enabled)
+                knowledge_graph_enabled = False
+                try:
+                    knowledge_graph_enabled = is_feature_enabled(dispatch_config, "knowledge_graph")
+                except Exception:
+                    pass
+
+                if knowledge_graph_enabled and len(ep_ids) >= 2:
+                    try:
+                        from equipa import graph
+                        graph.create_coaccessed_edges(ep_ids)
+                        # Silent success — don't spam logs during prompt building
+                    except Exception:
+                        # Graph module unavailable or error — continue without graph updates
+                        pass
+
     # Inject task-type-specific guidance if available
     task_type_supplement = ""
     if dispatch_config and "task_type_prompts" in dispatch_config:
