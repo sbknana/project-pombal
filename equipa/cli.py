@@ -630,11 +630,59 @@ async def async_main() -> None:
     # --- Execute ---
 
     if args.dev_test:
-        # Dev+Tester iteration loop (Phase 2)
+        # Dev+Tester iteration loop (Phase 2) with autoresearch retry
         print(f"\nStarting Dev+Test loop (max {MAX_DEV_TEST_CYCLES} cycles)...")
-        result, cycles, outcome = await run_dev_test_loop(
-            task, project_dir, project_context, args,
-        )
+
+        # Autoresearch config
+        dc = getattr(args, "dispatch_config", None) or {}
+        autoresearch_on = is_feature_enabled(dc, "autoresearch")
+        max_retries = dc.get("autoresearch_max_retries", 3) if autoresearch_on else 0
+        retry_count = 0
+
+        while True:
+            result, cycles, outcome = await run_dev_test_loop(
+                task, project_dir, project_context, args,
+            )
+
+            # Success - break out
+            if outcome in ("tests_passed", "no_tests", "early_completed_no_changes"):
+                break
+
+            # Not retriable or exhausted
+            if not autoresearch_on or retry_count >= max_retries:
+                if retry_count > 0:
+                    print(f"  [Autoresearch] Exhausted {retry_count}/{max_retries} retries "
+                          f"for task #{task['id']}. Final outcome: {outcome}")
+                break
+
+            retry_count += 1
+            print(f"  [Autoresearch] Task #{task['id']} failed ({outcome}). "
+                  f"Retry {retry_count}/{max_retries}...")
+
+            # Clean up failed git branch
+            import subprocess as _sp
+            branch_name = f"forge-task-{task['id']}"
+            try:
+                from equipa.git_ops import _is_git_repo
+                if _is_git_repo(project_dir):
+                    cp = _sp.run(["git", "rev-parse", "--verify", "main"],
+                                 cwd=project_dir, capture_output=True)
+                    default_branch = "main" if cp.returncode == 0 else "master"
+                    _sp.run(["git", "checkout", default_branch],
+                            cwd=project_dir, capture_output=True)
+                    _sp.run(["git", "branch", "-D", branch_name],
+                            cwd=project_dir, capture_output=True)
+                    print(f"  [Autoresearch] Cleaned up branch {branch_name}")
+            except Exception as e:
+                print(f"  [Autoresearch] Git cleanup warning: {e}")
+
+            # Reset task to todo
+            from equipa.db import get_db_connection
+            conn = get_db_connection(write=True)
+            conn.execute("UPDATE tasks SET status = 'todo' WHERE id = ?", (task["id"],))
+            conn.commit()
+            conn.close()
+            print(f"  [Autoresearch] Reset task #{task['id']} to todo for fresh attempt")
 
         # Post-task telemetry (DB update, ForgeSmith recording, quality scoring, reflexion, MemRL)
         task_role = task.get("role") or "developer"
