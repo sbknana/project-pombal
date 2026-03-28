@@ -190,6 +190,13 @@ def find_similar_by_embedding(
     if table not in {"lessons", "episodes"}:
         return []
 
+    # Map logical table names to actual DB table names
+    table_map = {
+        "lessons": "lessons_learned",
+        "episodes": "agent_episodes",
+    }
+    actual_table = table_map[table]
+
     config = dispatch_config or {}
     model = config.get("ollama_model", "all-MiniLM-L6-v2")
     base_url = config.get("ollama_base_url", "http://localhost:11434")
@@ -201,7 +208,7 @@ def find_similar_by_embedding(
     try:
         conn = sqlite3.connect(str(THEFORGE_DB))
         try:
-            cursor = conn.execute(f"SELECT id, embedding FROM {table} WHERE embedding IS NOT NULL")
+            cursor = conn.execute(f"SELECT id, embedding FROM {actual_table} WHERE embedding IS NOT NULL")
             rows = cursor.fetchall()
 
             scores: list[tuple[int, float]] = []
