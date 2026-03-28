@@ -28,6 +28,10 @@ def test_db(tmp_path, monkeypatch):
     monkeypatch.setattr("equipa.lessons.THEFORGE_DB", db_path)
     monkeypatch.setattr("equipa.embeddings.THEFORGE_DB", db_path)
 
+    # Reset the global schema flag to force schema creation
+    import equipa.db
+    monkeypatch.setattr("equipa.db._SCHEMA_ENSURED", False)
+
     # Initialize schema
     ensure_schema()
 
