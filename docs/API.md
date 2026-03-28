@@ -95,7 +95,7 @@
 - [Propose prompt optimizations only](#propose-prompt-optimizations-only)
 - [Rollback a specific run](#rollback-a-specific-run)
     - [GEPA (Prompt Evolution) — `forgesmith_gepa.py`](#gepa-prompt-evolution-forgesmith_gepapy)
-    - [SIMBA (Rule Generation) — `forgesmith_simba.py`](#simba-rule-generation-forgesmith_simbapy)
+    - [SIMBA (Rule Generation) — `scripts/forgesmith_simba.py`](#simba-rule-generation-forgesmith_simbapy)
   - [Error Handling](#error-handling)
     - [MCP Server Errors](#mcp-server-errors)
     - [Error Classification](#error-classification)
@@ -603,14 +603,14 @@ python forgesmith_gepa.py --role developer
 | `get_ab_prompt_for_role(role)` | Gets A/B test variant if one exists |
 | `rollback_evolved_prompt(role, version)` | Reverts to a previous prompt version |
 
-### SIMBA (Rule Generation) — `forgesmith_simba.py`
+### SIMBA (Rule Generation) — `scripts/forgesmith_simba.py`
 
 Generates behavioral rules from high-variance episodes. "If this situation, do this."
 
 ```bash
-python forgesmith_simba.py
-python forgesmith_simba.py --dry-run
-python forgesmith_simba.py --role tester
+python3 scripts/forgesmith_simba.py
+python3 scripts/forgesmith_simba.py --dry-run
+python3 scripts/forgesmith_simba.py --role tester
 ```
 
 | Function | What It Does |

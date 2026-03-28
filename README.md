@@ -142,8 +142,8 @@ equipa/                    # 21 modules, ~11,500 lines
 Self-improvement lives outside the package:
 - `forgesmith.py` — Lesson extraction and configuration tuning
 - `forgesmith_gepa.py` — CMA-ES prompt evolution with A/B testing
-- `forgesmith_simba.py` — Behavioral rule synthesis from failure patterns
-- `autoresearch_loop.py` — Nightly benchmarking and optimization
+- `scripts/forgesmith_simba.py` — Behavioral rule synthesis from failure patterns
+- `scripts/autoresearch_loop.py` — Nightly benchmarking and optimization
 
 ---
 

@@ -241,10 +241,10 @@ crontab -e
 0 2 * * * cd /opt/equipa && python3 forgesmith.py --mode full >> /opt/equipa/logs/forgesmith.log 2>&1
 
 # SIMBA rule generation — runs at 3am
-0 3 * * * cd /opt/equipa && python3 forgesmith_simba.py >> /opt/equipa/logs/simba.log 2>&1
+0 3 * * * cd /opt/equipa && python3 scripts/forgesmith_simba.py >> /opt/equipa/logs/simba.log 2>&1
 
 # Nightly review report
-0 6 * * * cd /opt/equipa && python3 nightly_review.py >> /opt/equipa/logs/nightly.log 2>&1
+0 6 * * * cd /opt/equipa && python3 scripts/nightly_review.py >> /opt/equipa/logs/nightly.log 2>&1
 ```
 
 ### PM2 (if you prefer it)

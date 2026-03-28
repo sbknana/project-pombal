@@ -217,15 +217,15 @@ equipa/                     # Core package
 ├── output.py               # Logging, dispatch summaries
 
 forgesmith.py               # Self-improvement engine (main)
-forgesmith_simba.py         # SIMBA: behavioral rule generation from failure patterns
+scripts/forgesmith_simba.py         # SIMBA: behavioral rule generation from failure patterns
 forgesmith_gepa.py          # GEPA: genetic prompt evolution with A/B testing
-forgesmith_impact.py        # Blast radius analysis for config changes
-forgesmith_backfill.py      # Backfill episode data from agent logs
+scripts/forgesmith_impact.py        # Blast radius analysis for config changes
+scripts/forgesmith_backfill.py      # Backfill episode data from agent logs
 
 ollama_agent.py             # Local model agent with sandboxed tool execution
 rubric_quality_scorer.py    # Multi-dimensional output scoring
 lesson_sanitizer.py         # Injection-safe lesson formatting
-nightly_review.py           # Portfolio status report generator
+scripts/nightly_review.py           # Portfolio status report generator
 db_migrate.py               # Schema migrations (v0 → v5)
 equipa_setup.py             # Interactive installer
 

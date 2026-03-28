@@ -299,7 +299,7 @@ equipa/              # Core package (21 modules)
 └── ...
 forgesmith.py        # Self-improvement engine
 forgesmith_gepa.py   # Prompt evolution (GEPA)
-forgesmith_simba.py  # Rule extraction (SIMBA)
+scripts/forgesmith_simba.py  # Rule extraction (SIMBA)
 skills/              # Agent skill definitions
 prompts/             # Role-specific and language-specific prompts
 tests/               # 334+ tests
