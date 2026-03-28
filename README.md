@@ -11,23 +11,23 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/dependencies-zero-brightgreen" alt="Zero Dependencies">
-  <img src="https://img.shields.io/badge/license-MIT-orange" alt="MIT">
-  <img src="https://img.shields.io/badge/tests-334%2B-success" alt="334+ Tests">
+  <img src="https://img.shields.io/badge/license-Apache%202.0-orange" alt="Apache 2.0">
+  <img src="https://img.shields.io/badge/tests-518-success" alt="518 Tests">
 </p>
 
 ---
 
 Software development takes dedication, perseverance, and knowledge. No tool changes that. What EQUIPA does is multiply your productivity — it handles the repetitive, parallelizable parts of the workflow so you can focus on the hard problems that actually need a human brain.
 
-You talk to Claude. That's the interface. Describe what you want in plain English — "fix the login bug", "add search to the dashboard", "run a security review" — and Claude handles everything behind the scenes. It creates tasks, dispatches specialized AI agents, monitors their work, retries on failure, and reports results back to you. You never touch the orchestrator directly.
+You talk to Claude. Describe what you want in plain English — "fix the login bug", "add search to the dashboard", "run a security review" — and Claude handles the rest. It creates tasks, dispatches specialized AI agents, monitors their work, retries on failure, and reports results back to you.
 
-Then it gets better at its job. An autoresearch loop benchmarks agent performance, mutates prompts using genetic optimization, and commits or reverts based on results. Your agents tomorrow are measurably better than your agents today. Set it on a nightly cron and it improves itself while you sleep.
+Then it gets better at its job. A three-layer self-improvement system benchmarks agent performance, evolves prompts using genetic optimization, and auto-rolls back changes that hurt results. Your agents tomorrow are measurably better than your agents today.
 
 This is a productivity tool, not a magic wand. You still need to review the output, understand your codebase, and make the real decisions. EQUIPA just means you're not doing the grunt work alone.
 
 ---
 
-## See It in Action
+## What It Actually Does
 
 ```
 You: "Build user authentication with Google OAuth"
@@ -38,119 +38,112 @@ EQUIPA:
   Task 4 waiting on task 2 (needs routes)
   Task 5 waiting on all (integration tests)
 
-  OAuth config            -> src/config/auth.ts
-  Login/callback routes   -> /auth/google, /auth/callback
-  Session middleware       -> signed cookies
-  Login UI component      -> Google branding guidelines
-  8 integration tests     -> all passing
-
-  "Want me to run a security review on the auth flow?"
-```
-
-```
-You: "Users are getting 500 errors on checkout"
-
-EQUIPA:
-  Dispatched debugger agent
-  Root cause: null pointer in calculateTotal() — discounted items with no original price
-  Dispatched developer agent -> fix applied
-  Dispatched tester agent -> 4 new edge case tests, all passing
-  Done.
-```
-
-```
-You: "Review the payment module for security issues"
-
-EQUIPA:
-  Dispatched security reviewer (Trail of Bits tooling)
-  MEDIUM: Session tokens not rotated after privilege escalation
-  LOW: CSRF token missing on logout endpoint
-  "Want me to create fix tasks for these?"
+  Developer agent -> wrote OAuth config, routes, middleware, UI
+  Tester agent -> 8 integration tests, all passing
+  Security reviewer -> flagged session token rotation issue
+  Done. 3 tasks passed first try, 2 needed one retry.
 ```
 
 You direct. EQUIPA executes. You review and decide what ships.
 
 ---
 
-## What Makes EQUIPA Different
-
-Most agent frameworks give you a library and tell you to build your own orchestration. EQUIPA gives you a **development team** — with memory, specialization, and the ability to learn from its own mistakes. You still drive. It just means you're not driving alone.
+## Features
 
 ### Dev-Test Iteration Loop
-Every coding task runs through a developer → tester cycle. If tests fail, the developer gets the failure context and tries again — up to 5 cycles. No human babysitting required.
+Every coding task runs through a developer -> tester cycle. If tests fail, the developer gets the failure context and tries again — up to 5 cycles. No human babysitting required.
 
 ### Self-Improving Agents
-Three systems work together in a closed feedback loop:
+Three systems work together:
 - **ForgeSmith** extracts lessons from failures and tunes configuration
-- **GEPA** evolves agent prompts through genetic optimization (validated at ICLR 2026)
-- **SIMBA** synthesizes rules from recurring failure patterns
+- **GEPA** evolves agent prompts through CMA-ES genetic optimization
+- **SIMBA** synthesizes behavioral rules from recurring failure patterns
 
-Lessons update episode quality scores. GEPA checks history before trying new prompt variants. SIMBA rules influence which past experiences get surfaced. The loop closes automatically.
+Bad changes get auto-rolled back when effectiveness scores drop below threshold.
 
-### Episodic Memory
-Every task outcome is stored as an episode with a quality score. When similar tasks come up, EQUIPA retrieves relevant past experiences and injects them into the agent's context. Agents build on what worked and avoid repeating failures.
+### Semantic Memory
+Lessons and past experiences are embedded as vectors (via Ollama) and retrieved by semantic similarity — not just keyword matching. When a task resembles something EQUIPA has seen before, relevant lessons get injected into the agent's context automatically. A knowledge graph tracks which lessons are most connected and influential, prioritizing the most useful ones via PageRank.
 
-### Nine Specialized Roles
+Falls back to keyword matching if Ollama is not available. Works fine either way.
+
+### Cost-Based Model Routing
+EQUIPA analyzes task descriptions and automatically routes simple tasks to cheaper models and complex tasks to more capable ones. A circuit breaker degrades gracefully when a model has consecutive failures. Manual model overrides still take priority — auto-routing only kicks in as a fallback.
+
+### MCP Server
+EQUIPA exposes itself as an MCP (Model Context Protocol) server. Any IDE that supports MCP — Claude Code, VS Code, Cursor, JetBrains — can dispatch tasks, check status, query lessons, and read project context without touching the CLI. Pure Python, JSON-RPC over stdio, zero dependencies.
+
+```bash
+# Register in any Claude Code session
+claude mcp add equipa python3 /path/to/equipa/equipa/mcp_server.py
+```
+
+### 15 Specialized Agent Roles
 
 | Role | What It Does |
 |------|-------------|
-| **Developer** | Writes code. Loads codebase navigation, implementation planning, and error recovery skills. |
-| **Tester** | Writes and runs tests. Validates developer output. Iterates in dev-test loops. |
-| **Security Reviewer** | Deep audit with 7 Trail of Bits skills. Static analysis, variant analysis, sharp-edge detection. |
-| **Code Reviewer** | Quality, patterns, best practices. Architecture-level feedback. |
-| **Debugger** | Investigates bugs with hypothesis-driven 5-step methodology. Traces root causes. |
-| **Planner** | Breaks complex features into task lists with dependency graphs. |
-| **Frontend Designer** | UI/UX focused development. |
-| **Evaluator** | Assesses implementations against requirements. |
-| **Integration Tester** | Tests how components work together across boundaries. |
-
-### Language-Aware Prompts
-EQUIPA detects your project's language (Python, TypeScript, Go, C#, Java, Rust, JavaScript) and injects language-specific best practices into agent prompts. Agents write idiomatic code for your stack without being told.
+| Developer | Writes code, navigates codebases, plans implementations |
+| Tester | Writes and runs tests, validates developer output |
+| Security Reviewer | Deep audit with 7 security skills, static analysis, variant analysis |
+| Code Reviewer | Quality, patterns, best practices, architecture feedback |
+| Debugger | Hypothesis-driven bug investigation, traces root causes |
+| Planner | Breaks features into task lists with dependency graphs |
+| Frontend Designer | UI/UX focused development |
+| Evaluator | Assesses implementations against requirements |
+| Integration Tester | Tests cross-boundary component interactions |
+| QA Tester | End-to-end quality assurance |
+| Researcher | Deep-dives into technologies and approaches |
+| Economy Tester | Game economy balance testing |
+| Multiplayer Tester | Multiplayer game flow testing |
+| Story Tester | Narrative and story flow validation |
+| World Builder | Game world and lore construction |
 
 ### Git Worktree Isolation
-When running multiple tasks in parallel, each gets its own git branch via worktrees. Changes are isolated — one task can't break another. Successful work merges back automatically. This feature is actively being refined — merge reliability improves with each release.
+Parallel tasks each get their own git branch. Changes are isolated — one task cannot break another. Successful work merges back automatically.
 
 ### Cost Controls
-Per-task budgets scale by complexity. Dynamic turn allocation. Real-time cost tracking. Agents that waste turns reading without writing get warned at turn 5, final warning at turn 8, and killed at turn 10. You set the limits, EQUIPA enforces them.
+Per-task budgets scale by complexity (simple/medium/complex/epic). Agents that waste turns reading without writing get warned and then killed. You set the limits, EQUIPA enforces them.
 
-### Anti-Compaction State Persistence
-Long tasks that fill the LLM context window don't lose progress. Agents maintain a state file on disk tracking what they've done and what's next. If context compacts mid-task, they read the state file and continue.
+### Language Detection
+Detects your project language (Python, TypeScript, Go, C#, Java, Rust, JavaScript) and injects language-specific best practices. Agents write idiomatic code for your stack.
 
 ### Zero Dependencies
-Pure Python standard library. No pip install, no virtualenv, no dependency conflicts. Copy the folder, run the script. Works on any machine with Python 3.10+.
+Pure Python standard library. No pip install, no virtualenv, no supply chain risk. Copy the folder, run the script. Works on any machine with Python 3.10+.
 
 ---
 
 ## Architecture
 
-EQUIPA is organized as a Python package with 21 focused modules:
-
 ```
-equipa/                  # 21 modules (~280 lines each)
-├── cli.py               # Entry point and argument parsing
-├── dispatch.py           # Task scanning, scoring, parallel dispatch
-├── loops.py              # Dev-test iteration loop
-├── agent_runner.py       # Agent subprocess management and streaming
-├── prompts.py            # System prompt construction
-├── monitoring.py         # Stuck detection, loop detection, cost tracking
-├── db.py                 # Database connection and schema management
-├── tasks.py              # Task fetching and project context
-├── lessons.py            # Episodic memory, Q-values, SIMBA integration
-├── parsing.py            # Agent output parsing and compaction
-├── security.py           # Skill integrity verification, untrusted markers
-├── preflight.py          # Build checking, dependency installation
-├── checkpoints.py        # Task checkpointing for crash recovery
-├── messages.py           # Inter-agent messaging
-├── reflexion.py          # Failure classification and reflection
-├── manager.py            # Planner and evaluator agent coordination
-├── roles.py              # Role configuration and cost tracking
-├── constants.py          # Configuration constants
-├── git_ops.py            # Git operations and language detection
-├── output.py             # Logging and summary formatting
-└── config.py             # Config file loading
+equipa/                    # 21 modules, ~11,500 lines
+|-- cli.py                 # Entry point and argument parsing
+|-- dispatch.py            # Task scanning, scoring, parallel dispatch
+|-- loops.py               # Dev-test iteration loop
+|-- agent_runner.py        # Agent subprocess management and streaming
+|-- prompts.py             # System prompt construction with token budgeting
+|-- monitoring.py          # Stuck detection, loop detection, cost tracking
+|-- embeddings.py          # Ollama vector embeddings + cosine similarity
+|-- routing.py             # Complexity scoring + cost-based model routing
+|-- graph.py               # Knowledge graph, PageRank, community detection
+|-- mcp_server.py          # MCP server (JSON-RPC over stdio)
+|-- db.py                  # Database connection and schema management
+|-- tasks.py               # Task fetching and project context
+|-- lessons.py             # Episodic memory, Q-values, vector retrieval
+|-- parsing.py             # Agent output parsing and compaction
+|-- security.py            # Skill integrity verification
+|-- preflight.py           # Build checking, dependency installation
+|-- checkpoints.py         # Task checkpointing for crash recovery
+|-- messages.py            # Inter-agent messaging
+|-- reflexion.py           # Post-task self-reflection
+|-- roles.py               # Role configuration and model selection
+|-- constants.py           # Configuration constants
++-- git_ops.py             # Git operations and language detection
 ```
 
-The original `forge_orchestrator.py` is a 26-line backward-compatibility shim. All implementation lives in the package.
+Self-improvement lives outside the package:
+- `forgesmith.py` — Lesson extraction and configuration tuning
+- `forgesmith_gepa.py` — CMA-ES prompt evolution with A/B testing
+- `forgesmith_simba.py` — Behavioral rule synthesis from failure patterns
+- `autoresearch_loop.py` — Nightly benchmarking and optimization
 
 ---
 
@@ -161,72 +154,77 @@ The original `forge_orchestrator.py` is a 26-line backward-compatibility shim. A
 git clone https://github.com/sbknana/equipa.git
 cd equipa
 
-# Setup (interactive wizard)
+# Setup
 python equipa_setup.py
 
-# Run a single task
+# Run a task
 python forge_orchestrator.py --task 42 --dev-test -y
 
 # Run tasks in parallel
-python forge_orchestrator.py --tasks 42,43,44 --dev-test -y
+python forge_orchestrator.py --tasks 42-50 --dev-test -y
 
-# Auto-dispatch all pending work
+# Auto-dispatch pending work
 python forge_orchestrator.py --dispatch -y
+
+# Start MCP server (for IDE integration)
+python -m equipa.mcp_server
 
 # Run self-improvement
 python forgesmith.py --auto
 ```
 
-## Requirements
+### Requirements
 
-- Python 3.10+
-- Claude Code CLI (`claude`) or Ollama for local LLM support
-- SQLite (included in Python)
+- Python 3.10+ (no pip install needed)
+- Claude Code CLI (`claude`) or Ollama for local LLM
 - Git (for worktree isolation)
 
-## Configuration
-
-Copy the example files and edit:
+### Configuration
 
 ```bash
-cp .env.example .env
 cp dispatch_config.example.json dispatch_config.json
 cp forge_config.example.json forge_config.json
-cp mcp_config.example.json mcp_config.json
 ```
 
-Or run the setup wizard: `python equipa_setup.py`
+Key settings in `dispatch_config.json`:
+- `model` — default model (sonnet/opus/haiku)
+- `features.vector_memory` — semantic lesson retrieval via Ollama
+- `features.auto_model_routing` — cost-based model selection
+- `features.knowledge_graph` — PageRank lesson prioritization
 
 ---
 
-## Current Limitations
+## Honest Limitations
 
-We believe in being honest about what doesn't work yet:
+- **Agents still get stuck.** Complex tasks can trigger analysis paralysis. The early termination system catches this, but some tasks need multiple attempts.
+- **Git merges are not perfect.** Parallel task merges occasionally need manual intervention.
+- **Self-improvement needs data.** ForgeSmith needs 20-30 task completions before patterns emerge.
+- **Tests required.** The dev-test loop only works if your project has a working test suite.
+- **Context limits are real.** Very long tasks can exhaust the LLM context window. Checkpointing helps but does not eliminate the problem.
+- **Vector memory needs Ollama.** Without it, falls back to keyword matching — still works, just less smart.
 
-- **Agents still get stuck.** Complex tasks with large codebases can trigger analysis paralysis — agents read for 10 turns without writing. The early termination system catches this, but it means some tasks need multiple attempts.
-- **Git worktree merges need work.** Parallel task merges occasionally fail or need manual intervention. We're actively improving merge verification.
-- **Self-improvement takes time.** ForgeSmith needs 20-30 task completions before patterns emerge. Don't expect overnight results.
-- **Tester depends on your tests.** The dev-test loop only works if your project has a working test suite. No tests = no iteration loop.
-- **Context limits are real.** Very long tasks can exhaust the LLM context window. Anti-compaction state helps but doesn't eliminate the problem.
+---
+
+## Production Use
+
+EQUIPA has been running in production since January 2026, building real software across multiple projects. It is not a demo or proof of concept — it is a tool we use every day.
 
 ---
 
 ## Documentation
 
-- [Quick Start](docs/QUICKSTART.md)
-- [User Guide](docs/USER_GUIDE.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [API Reference](docs/API.md)
-- [Deployment](docs/DEPLOYMENT.md)
-- [Contributing](docs/CONTRIBUTING.md)
-- [Custom Agents](docs/CUSTOM_AGENTS.md)
-- [Local LLM Support](docs/LOCAL_LLM.md)
-- [Concurrency Guide](docs/CONCURRENCY.md)
-- [Training](docs/TRAINING.md)
+- [Quick Start](docs/QUICKSTART.md) — Get running in 5 minutes
+- [User Guide](docs/USER_GUIDE.md) — Day-to-day usage
+- [Architecture](docs/ARCHITECTURE.md) — How the pieces fit together
+- [API Reference](docs/API.md) — Module and function reference
+- [Custom Agents](docs/CUSTOM_AGENTS.md) — Adding your own agent roles
+- [Local LLM Support](docs/LOCAL_LLM.md) — Using Ollama instead of Claude
+- [Deployment](docs/DEPLOYMENT.md) — Server and CI/CD setup
+- [Contributing](docs/CONTRIBUTING.md) — How to contribute
 
 ## License
 
-MIT
+[Apache 2.0](LICENSE)
 
 ## Credits
 
