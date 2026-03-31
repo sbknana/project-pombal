@@ -40,10 +40,17 @@ ALLOWED_MODELS = frozenset({
 # --- Paths ---
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-THEFORGE_DB = os.environ.get(
-    "THEFORGE_DB",
-    str(Path(__file__).resolve().parent / "theforge.db"),
-)
+
+# Prefer equipa.constants.THEFORGE_DB when running within the package (tests,
+# orchestrator integration).  Fall back to script-relative path for standalone use.
+try:
+    from equipa.constants import THEFORGE_DB as _EQUIPA_DB
+    THEFORGE_DB = os.environ.get("THEFORGE_DB", str(_EQUIPA_DB))
+except ImportError:
+    THEFORGE_DB = os.environ.get(
+        "THEFORGE_DB",
+        str(Path(__file__).resolve().parent / "theforge.db"),
+    )
 
 # --- Constants ---
 
