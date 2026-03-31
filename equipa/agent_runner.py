@@ -17,6 +17,7 @@ import subprocess
 import time
 from typing import Any
 
+from equipa.abort_controller import AbortController, create_child_abort_controller
 from equipa.constants import (
     EARLY_TERM_EXEMPT_ROLES,
     EARLY_TERM_FINAL_WARN_TURNS,
