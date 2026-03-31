@@ -2,6 +2,16 @@
 
 Layer 5: Imports from equipa.constants, equipa.parsing, equipa.lessons, equipa.security.
 
+Implements a static/dynamic cache split strategy ported from Claude Code
+(nirholas-claude-code/src/constants/prompts.ts). The system prompt is divided
+into two sections separated by SYSTEM_PROMPT_DYNAMIC_BOUNDARY:
+
+  Static (globally cacheable):  _common.md + role prompt
+  Dynamic (per-task):           lessons, episodes, task description, language, budget
+
+This allows API-level prompt caching across tasks that share the same role,
+reducing cost by avoiding re-processing of the static prefix on every request.
+
 Copyright 2026 Forgeborn
 """
 
@@ -14,6 +24,7 @@ from equipa.constants import (
     BUDGET_CHECK_INTERVAL,
     PROMPTS_DIR,
     ROLE_PROMPTS,
+    SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
 )
 from equipa.lessons import (
     _injected_episodes_by_task,
@@ -40,6 +51,82 @@ from equipa.security import _make_untrusted_delimiter, wrap_untrusted
 # Track which prompt version was used per role (for A/B testing telemetry).
 # Set by build_system_prompt(), read by record_agent_run().
 _last_prompt_version: dict[str, str] = {}
+
+
+class PromptResult:
+    """System prompt with static/dynamic cache split.
+
+    The prompt is divided into two sections by SYSTEM_PROMPT_DYNAMIC_BOUNDARY:
+
+    - **static_prefix**: Role-invariant content (_common.md + role prompt).
+      Same for every task dispatched with the same role. Can be cached globally
+      by the API provider to avoid re-tokenizing on each request.
+
+    - **dynamic_suffix**: Per-task content (lessons, episodes, task description,
+      language guidance, budget visibility, extra context). Changes every dispatch.
+
+    Usage:
+        result = build_system_prompt(...)
+        # Full prompt (backward-compatible, includes boundary marker):
+        full = result.full
+        # Or use str() for the same:
+        full = str(result)
+        # Access split sections for cache-aware API calls:
+        static = result.static_prefix
+        dynamic = result.dynamic_suffix
+
+    The boundary marker is included in the full prompt so callers that don't
+    understand caching can pass the whole string as-is. Cache-aware callers
+    can split on the marker to send static content with scope='global'.
+    """
+
+    __slots__ = ("static_prefix", "dynamic_suffix")
+
+    def __init__(self, static_prefix: str, dynamic_suffix: str) -> None:
+        self.static_prefix = static_prefix
+        self.dynamic_suffix = dynamic_suffix
+
+    @property
+    def full(self) -> str:
+        """Full prompt string with boundary marker between static and dynamic."""
+        return (
+            self.static_prefix
+            + "\n\n"
+            + SYSTEM_PROMPT_DYNAMIC_BOUNDARY
+            + "\n\n"
+            + self.dynamic_suffix
+        )
+
+    def __str__(self) -> str:
+        """Backward-compatible: str(prompt_result) returns the full prompt."""
+        return self.full
+
+    def __len__(self) -> int:
+        """Length of the full prompt string."""
+        return len(self.full)
+
+    def __contains__(self, item: str) -> bool:
+        """Support 'in' operator for backward-compatible substring checks."""
+        return item in self.full
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, PromptResult):
+            return (
+                self.static_prefix == other.static_prefix
+                and self.dynamic_suffix == other.dynamic_suffix
+            )
+        if isinstance(other, str):
+            return self.full == other
+        return NotImplemented
+
+    def __repr__(self) -> str:
+        static_len = len(self.static_prefix)
+        dynamic_len = len(self.dynamic_suffix)
+        return (
+            f"PromptResult(static={static_len} chars, "
+            f"dynamic={dynamic_len} chars, "
+            f"total={static_len + dynamic_len} chars)"
+        )
 
 
 def build_task_prompt(
