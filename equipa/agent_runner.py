@@ -194,6 +194,7 @@ async def run_agent(
     max_retries: int = 10,
     fallback_model: str | None = None,
     persistent_retry: bool = False,
+    abort_controller: AbortController | None = None,
 ) -> dict[str, Any]:
     """Spawn claude -p with retry logic, exponential backoff, and model fallback.
 
@@ -210,6 +211,7 @@ async def run_agent(
         max_retries: Maximum retry attempts (default: 10, ignored if persistent=True)
         fallback_model: Model to fall back to after 3x 529 (e.g., "sonnet")
         persistent_retry: Enable persistent retry mode for unattended sessions
+        abort_controller: Optional parent abort controller for cancellation hierarchy
 
     Returns:
         Result dict with success, result_text, num_turns, duration, cost, errors
@@ -221,8 +223,27 @@ async def run_agent(
     model_fallback_triggered = False
     persistent_attempt = 0
 
+    # Create child abort controller if parent provided
+    child_controller = (
+        create_child_abort_controller(abort_controller)
+        if abort_controller
+        else AbortController()
+    )
+
     for attempt in range(1, max_retries + 1):
         attempt_start = time.time()
+
+        # Check if already aborted before spawning subprocess
+        if child_controller.signal.aborted:
+            duration = time.time() - start_time
+            return {
+                "success": False,
+                "result_text": "",
+                "num_turns": 0,
+                "duration": duration,
+                "cost": None,
+                "errors": [f"Aborted before execution: {child_controller.signal.reason}"],
+            }
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -230,6 +251,16 @@ async def run_agent(
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
+
+            # Register abort handler to kill subprocess
+            def abort_handler() -> None:
+                if process.returncode is None:
+                    try:
+                        process.kill()
+                    except ProcessLookupError:
+                        pass
+
+            child_controller.signal.add_event_listener("abort", abort_handler, once=True)
 
             try:
                 stdout_bytes, stderr_bytes = await asyncio.wait_for(
