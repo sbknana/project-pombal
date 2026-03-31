@@ -46,6 +46,7 @@ CREATE TABLE decisions (
     rationale TEXT,
     alternatives_considered TEXT,
     decided_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_validated DATETIME,
     FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
@@ -477,6 +478,13 @@ FROM open_questions q
 JOIN projects p ON q.project_id = p.id
 WHERE q.resolved = 0
   AND julianday('now') - julianday(q.asked_at) > 7;
+
+CREATE VIEW v_stale_decisions AS
+SELECT d.*, p.codename as project_name,
+       julianday('now') - julianday(COALESCE(d.last_validated, d.decided_at)) as days_since_validation
+FROM decisions d
+JOIN projects p ON d.project_id = p.id
+WHERE julianday('now') - julianday(COALESCE(d.last_validated, d.decided_at)) > 60;
 
 CREATE VIEW v_upcoming_reminders AS
 SELECT r.*, p.codename as project_name,
