@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import re
 
-from equipa.constants import EARLY_TERM_KILL_TURNS
+from equipa.constants import EARLY_TERM_KILL_TURNS, SYSTEM_PROMPT_DYNAMIC_BOUNDARY
 
 # --- Token Budget Constants ---
 # Anthropic recommendation: ~4 chars/token for Claude
