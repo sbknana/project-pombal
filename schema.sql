@@ -47,7 +47,12 @@ CREATE TABLE decisions (
     alternatives_considered TEXT,
     decided_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_validated DATETIME,
-    FOREIGN KEY (project_id) REFERENCES projects(id)
+    decision_type TEXT NOT NULL DEFAULT 'general',
+    status TEXT NOT NULL DEFAULT 'open',
+    resolved_by_task_id INTEGER DEFAULT NULL,
+    verified_at DATETIME DEFAULT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id),
+    FOREIGN KEY (resolved_by_task_id) REFERENCES tasks(id)
 );
 
 CREATE TABLE open_questions (
@@ -426,6 +431,9 @@ CREATE TABLE model_registry (
 
 CREATE INDEX idx_tasks_project_status ON tasks(project_id, status);
 CREATE INDEX idx_decisions_project ON decisions(project_id);
+CREATE INDEX idx_decisions_type ON decisions(decision_type);
+CREATE INDEX idx_decisions_status ON decisions(status);
+CREATE INDEX idx_decisions_resolved_by ON decisions(resolved_by_task_id);
 CREATE INDEX idx_open_questions_resolved ON open_questions(resolved);
 CREATE INDEX idx_projects_status ON projects(status);
 CREATE INDEX idx_components_project ON components(project_id);
@@ -484,7 +492,18 @@ SELECT d.*, p.codename as project_name,
        julianday('now') - julianday(COALESCE(d.last_validated, d.decided_at)) as days_since_validation
 FROM decisions d
 JOIN projects p ON d.project_id = p.id
-WHERE julianday('now') - julianday(COALESCE(d.last_validated, d.decided_at)) > 60;
+WHERE d.status NOT IN ('resolved', 'wont_fix', 'failed_resolution')
+  AND julianday('now') - julianday(COALESCE(d.last_validated, d.decided_at)) > 60;
+
+CREATE VIEW v_open_security_findings AS
+SELECT d.id, d.project_id, p.codename as project_name,
+       d.topic, d.decision, d.rationale,
+       d.decided_at, d.last_validated,
+       d.resolved_by_task_id
+FROM decisions d
+JOIN projects p ON d.project_id = p.id
+WHERE d.decision_type = 'security_finding'
+  AND d.status = 'open';
 
 CREATE VIEW v_upcoming_reminders AS
 SELECT r.*, p.codename as project_name,
