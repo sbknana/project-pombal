@@ -439,6 +439,7 @@ async def _run_agent_streaming_impl(
     run_id: int | None = None,
     cycle_number: int = 1,
     project_dir: str | None = None,
+    abort_controller: AbortController | None = None,
 ) -> dict[str, Any]:
     """Internal implementation of streaming agent execution.
 
@@ -448,6 +449,13 @@ async def _run_agent_streaming_impl(
     effective_timeout = timeout or PROCESS_TIMEOUT
     start_time = time.time()
     is_exempt = role in EARLY_TERM_EXEMPT_ROLES
+
+    # Create child abort controller if parent provided
+    child_controller = (
+        create_child_abort_controller(abort_controller)
+        if abort_controller
+        else AbortController()
+    )
 
     # Tracking state
     turn_count = 0
@@ -486,6 +494,17 @@ async def _run_agent_streaming_impl(
     turns_since_last_tool: int = 0
     last_soft_checkpoint_turn: int = 0
 
+    # Check if already aborted before spawning subprocess
+    if child_controller.signal.aborted:
+        return {
+            "success": False,
+            "result_text": "",
+            "num_turns": 0,
+            "duration": time.time() - start_time,
+            "cost": None,
+            "errors": [f"Aborted before execution: {child_controller.signal.reason}"],
+        }
+
     try:
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -493,6 +512,17 @@ async def _run_agent_streaming_impl(
             stderr=asyncio.subprocess.PIPE,
             limit=4 * 1024 * 1024,  # 4MB buffer for large file reads
         )
+
+        # Register abort handler to kill subprocess
+        def abort_handler() -> None:
+            if process.returncode is None:
+                try:
+                    process.kill()
+                except ProcessLookupError:
+                    pass
+
+        child_controller.signal.add_event_listener("abort", abort_handler, once=True)
+
     except FileNotFoundError:
         return {
             "success": False,
