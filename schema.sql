@@ -3,7 +3,7 @@
 -- Generated from the live theforge.db schema.
 -- Used by equipa_setup.py to create new installations.
 --
--- Tables: 30, Views: 7, Triggers: 1, Indexes: 11
+-- Tables: 30, Views: 9, Triggers: 1, Indexes: 14
 
 -- ============================================================
 -- TABLES
@@ -605,6 +605,6 @@ CREATE INDEX IF NOT EXISTS idx_lesson_graph_dst ON lesson_graph_edges(dst_id);
 -- ============================================================
 -- VERSION STAMP
 -- ============================================================
--- Marks fresh installs as v6. Migrations handle upgrades from older versions.
-PRAGMA user_version = 6;
+-- Marks fresh installs as v7. Migrations handle upgrades from older versions.
+PRAGMA user_version = 7;
 
