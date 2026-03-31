@@ -45,16 +45,16 @@ class AbortController:
         self._aborted = True
         self._reason = reason or asyncio.CancelledError("Operation aborted")
 
-        # Trigger all callbacks
-        for callback in self._callbacks:
+        # Trigger all callbacks (copy list to avoid mutation during iteration)
+        for callback in self._callbacks[:]:
             try:
                 callback()
             except Exception:
                 # Swallow exceptions in abort handlers to prevent cascade failures
                 pass
 
-        # Clear callbacks after triggering
-        self._callbacks.clear()
+        # DO NOT clear callbacks here — once=True handlers auto-remove themselves
+        # and some handlers may be WeakRefs that need to persist
 
     def _add_callback(self, callback: Callable[[], None]) -> None:
         """Internal: Register a callback to fire when aborted."""
