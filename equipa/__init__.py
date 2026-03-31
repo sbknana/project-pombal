@@ -113,6 +113,7 @@ from equipa.messages import (
 from equipa.parsing import (
     CHARS_PER_TOKEN,
     EPISODE_REDUCTION_THRESHOLD,
+    SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
     SYSTEM_PROMPT_TOKEN_HARD_LIMIT,
     SYSTEM_PROMPT_TOKEN_TARGET,
     _DEVELOPER_FILES_SCHEMA,
@@ -217,6 +218,7 @@ from equipa.security import (
 
 # --- Prompts (equipa.prompts) ---
 from equipa.prompts import (
+    PromptResult,
     _last_prompt_version,
     build_checkpoint_context,
     build_evaluator_prompt,

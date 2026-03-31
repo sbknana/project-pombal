@@ -210,10 +210,16 @@ def build_system_prompt(
     dispatch_config: dict | None = None,
     error_type: str | None = None,
     max_turns: int | None = None,
-) -> str:
+) -> PromptResult:
     """Read _common.md + role prompt, replace placeholders, append task prompt.
 
+    Returns a PromptResult with static/dynamic cache split. The static prefix
+    (_common.md + role prompt) is the same for every task with a given role and
+    can be cached globally by the API provider. The dynamic suffix contains
+    per-task content (lessons, episodes, task description, etc.).
+
     Applies context engineering principles:
+    - **Static/dynamic cache split** (reduces API cost via prompt caching)
     - Token budget management (8K target, trimming in priority order)
     - Lesson deduplication (60%+ word overlap removed, max 5)
     - Episode relevance scoring (keyword overlap + recency weighting)
@@ -229,8 +235,9 @@ def build_system_prompt(
         When provided, a budget visibility line is injected into the prompt so
         the agent can make rational decisions about depth vs breadth.
 
-    Returns the system prompt string. Also sets _last_prompt_version[role] for
-    telemetry tracking.
+    Returns PromptResult with .static_prefix, .dynamic_suffix, and .full properties.
+    str(result) returns the full prompt for backward compatibility.
+    Also sets _last_prompt_version[role] for telemetry tracking.
     """
     # Late imports to avoid circular dependencies with monolith during transition
     from equipa.git_ops import detect_project_language
@@ -278,14 +285,28 @@ def build_system_prompt(
     # its own boundary markers (addresses EQ-24, EQ-10, EQ-25).
     _untrusted_delimiter = _make_untrusted_delimiter()
 
-    # Build prompt: common rules + role-specific prompt (never trimmed)
+    # =========================================================================
+    # STATIC PREFIX — cacheable across tasks for the same role
+    # Contains: _common.md + role-specific prompt (with placeholder replacement)
+    # This section is identical for every task dispatched with the same role,
+    # enabling global cache scope at the API level.
+    # =========================================================================
     common_text = common_path.read_text(encoding="utf-8")
     role_text = role_path.read_text(encoding="utf-8")
-    template = common_text + "\n\n---\n\n" + role_text
+    static_template = common_text + "\n\n---\n\n" + role_text
 
-    # Replace placeholders
-    prompt = template.replace("{task_id}", str(task["id"]))
-    prompt = prompt.replace("{project_id}", str(task.get("project_id", "")))
+    # Replace placeholders in static section
+    # Note: {task_id} and {project_id} vary per task, so the static prefix
+    # is "per-role" cacheable — the same role+task combo will cache-hit on
+    # retries/continuations.
+    static_prefix = static_template.replace("{task_id}", str(task["id"]))
+    static_prefix = static_prefix.replace("{project_id}", str(task.get("project_id", "")))
+
+    # =========================================================================
+    # DYNAMIC SUFFIX — per-task content, changes every dispatch
+    # Contains: lessons, episodes, task prompt, language guidance, budget, extra
+    # =========================================================================
+    dynamic_parts: list[str] = []
 
     # --- Lesson injection with deduplication ---
     # Gated by forgesmith_lessons feature flag
@@ -296,7 +317,7 @@ def build_system_prompt(
             # Deduplicate: remove 60%+ word overlap, cap at 5
             lessons = deduplicate_lessons(lessons)
             lessons_text = format_lessons_for_injection(lessons, delimiter=_untrusted_delimiter)
-            prompt = prompt + "\n\n" + lessons_text
+            dynamic_parts.append(lessons_text)
             # Update times_injected counter for each lesson
             update_lesson_injection_count([l["id"] for l in lessons])
 
@@ -308,8 +329,8 @@ def build_system_prompt(
     task_description = task.get("description", "") if isinstance(task, dict) else ""
 
     if is_feature_enabled(dispatch_config, "forgesmith_episodes"):
-        # Check token budget to decide episode limit
-        current_tokens = estimate_tokens(prompt)
+        # Check token budget to decide episode limit (estimate from static only)
+        current_tokens = estimate_tokens(static_prefix)
         episode_limit = 3
         if current_tokens > EPISODE_REDUCTION_THRESHOLD:
             episode_limit = 2  # Reduce episodes when prompt is already large
@@ -323,7 +344,7 @@ def build_system_prompt(
             )
             if episodes:
                 episodes_text = format_episodes_for_injection(episodes, delimiter=_untrusted_delimiter)
-                prompt = prompt + "\n\n" + episodes_text
+                dynamic_parts.append(episodes_text)
                 # Track injected episode IDs for q-value updates after task completion
                 ep_ids = [ep["id"] for ep in episodes]
                 _injected_episodes_by_task[task_id] = ep_ids
@@ -346,23 +367,18 @@ def build_system_prompt(
                         pass
 
     # Inject task-type-specific guidance if available
-    task_type_supplement = ""
     if dispatch_config and "task_type_prompts" in dispatch_config:
         task_type = task.get("task_type", "feature") or "feature"
         task_type_prompts = dispatch_config["task_type_prompts"]
         if task_type in task_type_prompts:
-            task_type_supplement = (
-                f"\n\n## Task Type Guidance ({task_type})\n\n"
-                f"{task_type_prompts[task_type]}\n"
+            dynamic_parts.append(
+                f"## Task Type Guidance ({task_type})\n\n"
+                f"{task_type_prompts[task_type]}"
             )
 
     # Append task-specific instructions (never trimmed)
     task_prompt = build_task_prompt(task, project_context, project_dir, delimiter=_untrusted_delimiter)
-    prompt = prompt + "\n\n---\n\n" + task_prompt
-
-    # Append task-type supplement after task prompt
-    if task_type_supplement:
-        prompt = prompt + task_type_supplement
+    dynamic_parts.append("---\n\n" + task_prompt)
 
     # --- Language-specific prompt injection ---
     # Detect project language and load corresponding guidance if available
@@ -385,54 +401,68 @@ def build_system_prompt(
                                 f"\n\nDetected frameworks: {', '.join(detected)}. "
                                 f"Apply framework-specific patterns where relevant."
                             )
-                    prompt = prompt + "\n\n" + lang_text + frameworks_note
+                    dynamic_parts.append(lang_text + frameworks_note)
                     injected_langs.add(lang_key)
                 except OSError:
                     pass  # File read failed, skip silently
 
     # Budget visibility: tell the agent how many turns it has
     if max_turns and max_turns > 0:
-        prompt = prompt + (
-            f"\n\nYou have {max_turns} turns for this task. "
+        dynamic_parts.append(
+            f"You have {max_turns} turns for this task. "
             f"The orchestrator will log budget updates every "
             f"{BUDGET_CHECK_INTERVAL} turns."
         )
 
     # Append extra context (compaction history, test failures) if provided
     if extra_context:
-        prompt = prompt + "\n\n---\n\n" + extra_context
+        dynamic_parts.append("---\n\n" + extra_context)
+
+    # Assemble dynamic suffix
+    dynamic_suffix = "\n\n".join(dynamic_parts)
 
     # --- Token budget enforcement ---
     # Trim in priority order: old episodes first, then generic lessons
-    # Never trim: role prompt, task description
-    token_count = estimate_tokens(prompt)
+    # Never trim: role prompt (static), task description
+    # Trimming operates on the dynamic suffix only (static is never trimmed)
+    full_tokens = estimate_tokens(static_prefix) + estimate_tokens(dynamic_suffix)
 
-    if token_count > SYSTEM_PROMPT_TOKEN_TARGET:
+    if full_tokens > SYSTEM_PROMPT_TOKEN_TARGET:
         # Priority 1: Trim old episodes (## Past Experience)
-        if token_count > SYSTEM_PROMPT_TOKEN_TARGET:
-            prompt = _trim_prompt_section(prompt, "## Past Experience",
-                                          max_chars=CHARS_PER_TOKEN * 500)
-            token_count = estimate_tokens(prompt)
+        dynamic_suffix = _trim_prompt_section(
+            dynamic_suffix, "## Past Experience",
+            max_chars=CHARS_PER_TOKEN * 500,
+        )
+        full_tokens = estimate_tokens(static_prefix) + estimate_tokens(dynamic_suffix)
 
         # Priority 2: Trim generic lessons (## Lessons from Previous Runs)
-        if token_count > SYSTEM_PROMPT_TOKEN_HARD_LIMIT:
-            prompt = _trim_prompt_section(prompt, "## Lessons from Previous Runs",
-                                          max_chars=CHARS_PER_TOKEN * 300)
-            token_count = estimate_tokens(prompt)
+        if full_tokens > SYSTEM_PROMPT_TOKEN_HARD_LIMIT:
+            dynamic_suffix = _trim_prompt_section(
+                dynamic_suffix, "## Lessons from Previous Runs",
+                max_chars=CHARS_PER_TOKEN * 300,
+            )
+            full_tokens = estimate_tokens(static_prefix) + estimate_tokens(dynamic_suffix)
 
         # Priority 3: Trim extra context (## Prior Work Summary, etc.)
-        if token_count > SYSTEM_PROMPT_TOKEN_HARD_LIMIT:
-            prompt = _trim_prompt_section(prompt, "## Prior Work Summary",
-                                          max_chars=CHARS_PER_TOKEN * 400)
-            token_count = estimate_tokens(prompt)
+        if full_tokens > SYSTEM_PROMPT_TOKEN_HARD_LIMIT:
+            dynamic_suffix = _trim_prompt_section(
+                dynamic_suffix, "## Prior Work Summary",
+                max_chars=CHARS_PER_TOKEN * 400,
+            )
 
-    # Log token count for monitoring
-    final_tokens = estimate_tokens(prompt)
-    budget_status = "OK" if final_tokens <= SYSTEM_PROMPT_TOKEN_TARGET else "OVER"
-    print(f"  [ContextEng] System prompt: {len(prompt)} chars, ~{final_tokens} tokens "
-          f"({budget_status}, target: {SYSTEM_PROMPT_TOKEN_TARGET})")
+    # Log token count with cache split visibility
+    static_tokens = estimate_tokens(static_prefix)
+    dynamic_tokens = estimate_tokens(dynamic_suffix)
+    total_tokens = static_tokens + dynamic_tokens
+    budget_status = "OK" if total_tokens <= SYSTEM_PROMPT_TOKEN_TARGET else "OVER"
+    result = PromptResult(static_prefix=static_prefix, dynamic_suffix=dynamic_suffix)
+    print(
+        f"  [ContextEng] System prompt: {len(result)} chars, ~{total_tokens} tokens "
+        f"({budget_status}, target: {SYSTEM_PROMPT_TOKEN_TARGET}) "
+        f"[static: ~{static_tokens}t | dynamic: ~{dynamic_tokens}t]"
+    )
 
-    return prompt
+    return result
 
 
 def build_checkpoint_context(checkpoint_text: str, attempt: int) -> str:
@@ -470,22 +500,24 @@ def build_planner_prompt(
     project_id: int,
     project_dir: str,
     project_context: dict[str, Any],
-) -> str:
+) -> PromptResult:
     """Build the system prompt for the Planner agent.
 
     The Planner gets the goal, project context, and codebase access.
     It does NOT get a task — it creates tasks.
+
+    Returns PromptResult with static/dynamic cache split.
     """
     common_path = PROMPTS_DIR / "_common.md"
     role_path = ROLE_PROMPTS["planner"]
 
     common_text = common_path.read_text(encoding="utf-8")
     role_text = role_path.read_text(encoding="utf-8")
-    template = common_text + "\n\n---\n\n" + role_text
+    static_template = common_text + "\n\n---\n\n" + role_text
 
-    # Replace project_id placeholder (planner doesn't have a task_id)
-    prompt = template.replace("{project_id}", str(project_id))
-    prompt = prompt.replace("{task_id}", "N/A")
+    # Static prefix: role prompt with project_id placeholder replaced
+    static_prefix = static_template.replace("{project_id}", str(project_id))
+    static_prefix = static_prefix.replace("{task_id}", "N/A")
 
     # Per-prompt unpredictable delimiter for untrusted content isolation
     _delim = _make_untrusted_delimiter()
@@ -495,7 +527,7 @@ def build_planner_prompt(
         inner = wrap_untrusted(content, _delim)
         return f'<task-input type="{tag_type}" trust="user">\n{inner}\n</task-input>'
 
-    # Append goal and project context
+    # Dynamic suffix: goal and project context
     lines = [
         "## Goal",
         "",
@@ -525,8 +557,8 @@ def build_planner_prompt(
         lines.append(_wrap("open-questions", "\n".join(q_lines)))
         lines.append("")
 
-    prompt = prompt + "\n\n---\n\n" + "\n".join(lines)
-    return prompt
+    dynamic_suffix = "---\n\n" + "\n".join(lines)
+    return PromptResult(static_prefix=static_prefix, dynamic_suffix=dynamic_suffix)
 
 
 def build_evaluator_prompt(
@@ -536,21 +568,24 @@ def build_evaluator_prompt(
     project_context: dict[str, Any],
     completed_tasks: list[dict],
     blocked_tasks: list[dict],
-) -> str:
+) -> PromptResult:
     """Build the system prompt for the Evaluator agent.
 
     The Evaluator gets the original goal, completed/blocked task info,
     and codebase access to verify work.
+
+    Returns PromptResult with static/dynamic cache split.
     """
     common_path = PROMPTS_DIR / "_common.md"
     role_path = ROLE_PROMPTS["evaluator"]
 
     common_text = common_path.read_text(encoding="utf-8")
     role_text = role_path.read_text(encoding="utf-8")
-    template = common_text + "\n\n---\n\n" + role_text
+    static_template = common_text + "\n\n---\n\n" + role_text
 
-    prompt = template.replace("{project_id}", str(project_id))
-    prompt = prompt.replace("{task_id}", "N/A")
+    # Static prefix: role prompt with project_id placeholder replaced
+    static_prefix = static_template.replace("{project_id}", str(project_id))
+    static_prefix = static_prefix.replace("{task_id}", "N/A")
 
     # Per-prompt unpredictable delimiter for untrusted content isolation
     _delim = _make_untrusted_delimiter()
@@ -559,6 +594,7 @@ def build_evaluator_prompt(
         inner = wrap_untrusted(content, _delim)
         return f'<task-input type="{tag_type}" trust="{trust}">\n{inner}\n</task-input>'
 
+    # Dynamic suffix: goal, project info, task results
     lines = [
         "## Original Goal",
         "",
@@ -593,5 +629,5 @@ def build_evaluator_prompt(
         lines.append("No tasks were completed or blocked. This is unexpected.")
         lines.append("")
 
-    prompt = prompt + "\n\n---\n\n" + "\n".join(lines)
-    return prompt
+    dynamic_suffix = "---\n\n" + "\n".join(lines)
+    return PromptResult(static_prefix=static_prefix, dynamic_suffix=dynamic_suffix)

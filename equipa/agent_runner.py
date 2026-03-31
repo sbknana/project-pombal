@@ -18,6 +18,7 @@ import time
 from typing import Any
 
 from equipa.abort_controller import AbortController, create_child_abort_controller
+from equipa.bash_security import check_bash_command
 from equipa.constants import (
     EARLY_TERM_EXEMPT_ROLES,
     EARLY_TERM_FINAL_WARN_TURNS,
@@ -513,6 +514,17 @@ async def _run_agent_streaming_impl(
                                 files_changed.add(file_path)
                         elif tool_name == "Bash":
                             bash_cmd = tool_input.get("command", "")
+
+                            # --- Bash security pre-execution filter ---
+                            sec_result = check_bash_command(bash_cmd)
+                            if not sec_result.safe:
+                                log(f"  [BashSecurity] BLOCKED check={sec_result.check_id}: "
+                                    f"{sec_result.message} — cmd={bash_cmd[:120]}", output)
+                                early_term_reason = (
+                                    f"Bash security violation (check {sec_result.check_id}): "
+                                    f"{sec_result.message}"
+                                )
+
                             if any(kw in bash_cmd for kw in [
                                 "git commit", "git add", "go build", "npm run build",
                                 "mkdir", "cp ", "mv ", "touch ", "tee ", "> ",
