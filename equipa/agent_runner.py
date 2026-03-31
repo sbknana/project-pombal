@@ -327,7 +327,7 @@ async def run_agent(
     return result
 
 
-async def run_agent_streaming(
+async def _run_agent_streaming_impl(
     cmd: list[str],
     role: str = "developer",
     timeout: int | None = None,
@@ -338,16 +338,10 @@ async def run_agent_streaming(
     cycle_number: int = 1,
     project_dir: str | None = None,
 ) -> dict[str, Any]:
-    """Spawn claude -p with stream-json output for real-time stuck detection.
+    """Internal implementation of streaming agent execution.
 
-    Monitors agent output turn-by-turn and terminates early if stuck signals
-    are detected. Only applies file-change monitoring to non-exempt roles
-    (developer, tester, debugger, etc.).
-
-    When task_id is provided, per-tool actions are logged to the agent_actions
-    table for observability and ForgeSmith analysis.
-
-    Returns the same dict format as run_agent().
+    This is the actual implementation that gets wrapped by run_agent_streaming
+    with retry logic.
     """
     effective_timeout = timeout or PROCESS_TIMEOUT
     start_time = time.time()
@@ -844,7 +838,7 @@ async def run_agent_streaming_with_retry(
     task_id: int | None = None,
     cycle_number: int = 1,
     project_dir: str | None = None,
-    max_retries: int = MAX_RETRIES,
+    max_retries: int = 10,
     fallback_model: str | None = "sonnet",
 ) -> dict[str, Any]:
     """Wrap run_agent_streaming with retry logic + exponential backoff + model fallback.
@@ -863,7 +857,7 @@ async def run_agent_streaming_with_retry(
         attempt_start = time.time()
 
         # Execute streaming agent
-        result = await run_agent_streaming(
+        result = await _run_agent_streaming_impl(
             cmd, role=role, output=output, max_turns=max_turns,
             task_id=task_id, run_id=None, cycle_number=cycle_number,
             project_dir=project_dir
@@ -921,6 +915,38 @@ async def run_agent_streaming_with_retry(
 
     # Should never reach here, but fallback return
     return result
+
+
+async def run_agent_streaming(
+    cmd: list[str],
+    role: str = "developer",
+    timeout: int | None = None,
+    output: Any = None,
+    max_turns: int | None = None,
+    task_id: int | None = None,
+    run_id: int | None = None,
+    cycle_number: int = 1,
+    project_dir: str | None = None,
+) -> dict[str, Any]:
+    """Spawn claude -p with stream-json output for real-time stuck detection.
+
+    Monitors agent output turn-by-turn and terminates early if stuck signals
+    are detected. Only applies file-change monitoring to non-exempt roles
+    (developer, tester, debugger, etc.).
+
+    When task_id is provided, per-tool actions are logged to the agent_actions
+    table for observability and ForgeSmith analysis.
+
+    This function automatically includes retry logic with exponential backoff
+    and model fallback (after 3x 529 errors). Use run_agent_streaming_with_retry
+    directly if you need to customize retry parameters.
+
+    Returns the same dict format as run_agent().
+    """
+    return await run_agent_streaming_with_retry(
+        cmd, role=role, output=output, max_turns=max_turns,
+        task_id=task_id, cycle_number=cycle_number, project_dir=project_dir
+    )
 
 
 async def dispatch_agent(
