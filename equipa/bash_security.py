@@ -67,6 +67,8 @@ class CheckID:
     UNICODE_WHITESPACE = 18
     HEREDOC_IN_SUBSTITUTION = 19
     MID_WORD_HASH = 19  # shares slot with heredoc (different check context)
+    GIT_COMMIT_SUBSTITUTION = 12
+    MALFORMED_TOKEN_INJECTION = 14  # Requires shell parser; not implemented (pure stdlib)
     ZSH_DANGEROUS_COMMANDS = 20
     BACKSLASH_ESCAPED_OPERATORS = 21
     COMMENT_QUOTE_DESYNC = 22
@@ -309,6 +311,80 @@ def _check_jq_exploits(command: str, base_cmd: str) -> BashSecurityResult:
             safe=False, check_id=CheckID.JQ_FILE_ARGUMENTS,
             message="jq command contains @base64d which can decode hidden payloads",
         )
+    return _SAFE
+
+
+def _check_git_commit_substitution(
+    command: str, base_cmd: str,
+) -> BashSecurityResult:
+    """Check 12: Command substitution inside git commit -m messages.
+
+    ``git commit -m "$(evil)"`` expands the substitution before git sees it.
+    Double-quoted messages allow expansion; single-quoted are safe.
+
+    Also blocks:
+    - Shell metacharacters in the remainder after the -m "..." argument
+      (e.g., ``git commit -m 'msg' > ~/.bashrc``)
+    - Commit messages starting with ``-`` (flag-like obfuscation)
+    """
+    if base_cmd != "git":
+        return _SAFE
+    if not re.match(r"^git\s+commit\s+", command):
+        return _SAFE
+
+    # Backslashes can desync our regex quote-boundary detection — bail
+    if "\\" in command:
+        return _SAFE  # Let other validators handle it
+
+    # Match: git commit [flags] -m <quote><message><quote> [remainder]
+    # The character class before -m excludes shell metacharacters so that
+    # ``git commit ; evil -m 'x'`` does NOT match (`;`` is not in the class).
+    msg_match = re.match(
+        r"""^git[ \t]+commit[ \t]+[^;&|`$<>()\n\r]*?"""
+        r"""-m[ \t]+(["'])([\s\S]*?)\1(.*)$""",
+        command,
+    )
+    if not msg_match:
+        return _SAFE
+
+    quote = msg_match.group(1)
+    message_content = msg_match.group(2) or ""
+    remainder = msg_match.group(3) or ""
+
+    # Double-quoted message with $(), ``, or ${}
+    if quote == '"' and re.search(r"\$\(|`|\$\{", message_content):
+        return BashSecurityResult(
+            safe=False,
+            check_id=CheckID.GIT_COMMIT_SUBSTITUTION,
+            message="Git commit message contains command substitution patterns",
+        )
+
+    # Remainder after the -m argument contains shell operators
+    if remainder and re.search(r"[;|&()`]|\$\(|\$\{", remainder):
+        return BashSecurityResult(
+            safe=False,
+            check_id=CheckID.GIT_COMMIT_SUBSTITUTION,
+            message="Git commit has shell metacharacters after -m argument",
+        )
+
+    # Check for unquoted redirect operators in remainder
+    if remainder:
+        unquoted_rem = _extract_unquoted(remainder)
+        if re.search(r"[<>]", unquoted_rem):
+            return BashSecurityResult(
+                safe=False,
+                check_id=CheckID.GIT_COMMIT_SUBSTITUTION,
+                message="Git commit remainder contains unquoted redirect operator",
+            )
+
+    # Message starting with dash — flag obfuscation
+    if message_content.startswith("-"):
+        return BashSecurityResult(
+            safe=False,
+            check_id=CheckID.OBFUSCATED_FLAGS,
+            message="Git commit message starts with dash (potential flag obfuscation)",
+        )
+
     return _SAFE
 
 
@@ -878,6 +954,7 @@ def check_bash_command(command: str) -> BashSecurityResult:
         _check_dangerous_variables(unquoted),
         _check_shell_metacharacters(command, unquoted),
         _check_obfuscated_flags(command, base_cmd),
+        _check_git_commit_substitution(command, base_cmd),
         _check_jq_exploits(command, base_cmd),
         _check_backslash_escaped_whitespace(command),
         _check_backslash_escaped_operators(command),
