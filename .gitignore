@@ -131,3 +131,5 @@ skill_manifest.json
 docs-config.json
 docs/html/
 theforge.db
+RETRY-*.md
+TOOL_RESULT_STORAGE*.md
