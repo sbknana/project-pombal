@@ -753,9 +753,9 @@ SELECT * FROM v_project_dashboard;
 SELECT summary, next_steps, session_date FROM session_notes
 WHERE project_id = ? ORDER BY session_date DESC LIMIT 3;
 
--- Log a decision
-INSERT INTO decisions (project_id, topic, decision, rationale)
-VALUES (?, 'Topic', 'What was decided', 'Why');
+-- Log a decision (decision_type: general|security_finding|architectural|trade_off|resolution)
+INSERT INTO decisions (project_id, topic, decision, rationale, decision_type, status)
+VALUES (?, 'Topic', 'What was decided', 'Why', 'general', 'open');
 
 -- Add a session note
 INSERT INTO session_notes (project_id, summary, next_steps)

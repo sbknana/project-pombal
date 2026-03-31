@@ -46,9 +46,11 @@ UPDATE projects SET status = '{new_status}' WHERE id = {project_id};
 
 **For key decision:**
 ```sql
-INSERT INTO decisions (project_id, decision, rationale, alternatives, decided_at)
-VALUES ({project_id}, '{decision}', '{rationale}', '{alternatives}', CURRENT_TIMESTAMP);
+INSERT INTO decisions (project_id, decision, rationale, alternatives_considered, decision_type, status)
+VALUES ({project_id}, '{decision}', '{rationale}', '{alternatives}', 'general', 'open');
 ```
+Valid decision_type: general, security_finding, architectural, trade_off, resolution.
+Valid status: open, resolved, superseded, wont_fix, failed_resolution.
 
 ### Step 3: Update project CLAUDE.md
 

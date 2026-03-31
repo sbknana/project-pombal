@@ -2662,8 +2662,9 @@ def log_run(run_id, runs_analyzed, changes, summary, mode, cfg):
             f"{c['change_type']}: {c.get('rationale', '')[:100]}" for c in changes
         )
         conn.execute(
-            """INSERT INTO decisions (project_id, topic, decision, rationale)
-               VALUES (?, 'forgesmith-auto', ?, ?)""",
+            """INSERT INTO decisions
+               (project_id, topic, decision, rationale, decision_type, status)
+               VALUES (?, 'forgesmith-auto', ?, ?, 'general', 'open')""",
             (project_id,
              f"ForgeSmith run {run_id}: {len(changes)} changes applied",
              change_summary[:1000]),

@@ -55,9 +55,11 @@ Ask: "Did you make any decisions this session that should be recorded?"
 
 If yes:
 ```sql
-INSERT INTO decisions (project_id, decision, rationale, alternatives, decided_at)
-VALUES (?, '{decision}', '{rationale}', '{alternatives}', CURRENT_TIMESTAMP);
+INSERT INTO decisions (project_id, decision, rationale, alternatives_considered, decision_type, status)
+VALUES (?, '{decision}', '{rationale}', '{alternatives}', 'general', 'open');
 ```
+Valid decision_type: general, security_finding, architectural, trade_off, resolution.
+Valid status: open, resolved, superseded, wont_fix, failed_resolution.
 
 ### Step 5: Record blockers/questions (if any)
 

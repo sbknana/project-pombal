@@ -135,9 +135,13 @@ Output `RESULT: blocked` by turn 5 if <3 commits and no path forward.
 ## RECORDING DECISIONS
 
 ```sql
-INSERT INTO decisions (project_id, topic, decision, rationale, alternatives_considered)
-VALUES ({project_id}, 'Topic', 'What you decided', 'Why', 'Other options');
+INSERT INTO decisions (project_id, topic, decision, rationale, alternatives_considered, decision_type, status)
+VALUES ({project_id}, 'Topic', 'What you decided', 'Why', 'Other options', 'general', 'open');
 ```
+
+Valid decision_type values: general, security_finding, architectural, trade_off, resolution.
+Valid status values: open, resolved, superseded, wont_fix, failed_resolution.
+When resolving a prior finding, use decision_type='resolution' and set resolved_by_task_id to the current task ID.
 
 ## EARLY COMPLETION
 
