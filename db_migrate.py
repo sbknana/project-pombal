@@ -30,7 +30,7 @@ from datetime import datetime
 from pathlib import Path
 
 # The schema version that matches the current schema.sql
-CURRENT_VERSION = 5
+CURRENT_VERSION = 6
 
 
 # ============================================================
@@ -446,6 +446,35 @@ def migrate_v4_to_v5(conn):
     """)
 
 
+def migrate_v5_to_v6(conn):
+    """Add decision staleness tracking (v5.0 -> v6.0).
+
+    Adds:
+    - last_validated DATETIME column to decisions table
+    - v_stale_decisions view for decisions unvalidated for 60+ days
+    """
+    # Add last_validated column to decisions
+    try:
+        conn.execute(
+            "ALTER TABLE decisions "
+            "ADD COLUMN last_validated DATETIME DEFAULT NULL"
+        )
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
+    # Create v_stale_decisions view
+    conn.executescript("""
+        DROP VIEW IF EXISTS v_stale_decisions;
+        CREATE VIEW v_stale_decisions AS
+        SELECT d.*, p.codename as project_name,
+               julianday('now') - julianday(COALESCE(d.last_validated, d.decided_at)) as days_since_validation
+        FROM decisions d
+        JOIN projects p ON d.project_id = p.id
+        WHERE julianday('now') - julianday(COALESCE(d.last_validated, d.decided_at)) > 60;
+    """)
+
+
 # Migration registry: version -> (description, function)
 MIGRATIONS = {
     1: ("Baseline schema stamp (v0 -> v1)", migrate_v0_to_v1),
@@ -453,6 +482,7 @@ MIGRATIONS = {
     3: ("Agent messaging + action logging (v2 -> v3)", migrate_v2_to_v3),
     4: ("Impact assessment for ForgeSmith changes (v3 -> v4)", migrate_v3_to_v4),
     5: ("Embedding columns + lesson graph (v4 -> v5)", migrate_v4_to_v5),
+    6: ("Decision staleness tracking (v5 -> v6)", migrate_v5_to_v6),
 }
 
 

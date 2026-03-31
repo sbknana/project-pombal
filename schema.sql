@@ -586,6 +586,6 @@ CREATE INDEX IF NOT EXISTS idx_lesson_graph_dst ON lesson_graph_edges(dst_id);
 -- ============================================================
 -- VERSION STAMP
 -- ============================================================
--- Marks fresh installs as v5. Migrations handle upgrades from older versions.
-PRAGMA user_version = 5;
+-- Marks fresh installs as v6. Migrations handle upgrades from older versions.
+PRAGMA user_version = 6;
 
