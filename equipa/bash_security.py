@@ -117,6 +117,48 @@ def _extract_unquoted(command: str) -> str:
     return "".join(result)
 
 
+def _extract_unquoted_keep_delimiters(command: str) -> str:
+    """Strip quoted *content* but preserve quote delimiter characters.
+
+    Like ``_extract_unquoted`` but keeps ``'`` and ``"`` in the output.
+    This is needed by ``_check_mid_word_hash`` to detect quote-adjacent
+    ``#`` patterns like ``'x'#`` where full stripping would hide the
+    adjacency.
+    """
+    result: list[str] = []
+    in_single = False
+    in_double = False
+    escaped = False
+
+    for ch in command:
+        if escaped:
+            escaped = False
+            if not in_single and not in_double:
+                result.append(ch)
+            continue
+
+        if ch == "\\" and not in_single:
+            escaped = True
+            if not in_single and not in_double:
+                result.append(ch)
+            continue
+
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            result.append(ch)  # Keep the delimiter
+            continue
+
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            result.append(ch)  # Keep the delimiter
+            continue
+
+        if not in_single and not in_double:
+            result.append(ch)
+
+    return "".join(result)
+
+
 def _get_base_command(command: str) -> str:
     """Extract the first word (base command) from *command*."""
     stripped = command.lstrip()
@@ -639,9 +681,13 @@ def _check_shell_metacharacters(command: str, unquoted: str) -> BashSecurityResu
 
     Detects metacharacters smuggled inside quoted arguments to find-style
     commands (e.g., ``find . -name "foo;evil"``).
+
+    NOTE: These patterns must match against the ORIGINAL command (not the
+    unquoted version) because the metacharacters are *inside* quotes — the
+    unquoted extractor would strip them.
     """
     # Quoted args with metacharacters inside
-    if re.search(r'''(?:^|\s)["'][^"']*[;&][^"']*["'](?:\s|$)''', unquoted):
+    if re.search(r'''(?:^|\s)["'][^"']*[;&][^"']*["'](?:\s|$)''', command):
         return BashSecurityResult(
             safe=False, check_id=CheckID.SHELL_METACHARACTERS,
             message="Command contains shell metacharacters (;, |, or &) in arguments",
@@ -654,7 +700,7 @@ def _check_shell_metacharacters(command: str, unquoted: str) -> BashSecurityResu
         r'''-iname\s+["'][^"']*[;|&][^"']*["']''',
         r'''-regex\s+["'][^"']*[;&][^"']*["']''',
     ):
-        if re.search(pattern, unquoted):
+        if re.search(pattern, command):
             return BashSecurityResult(
                 safe=False, check_id=CheckID.SHELL_METACHARACTERS,
                 message="Command contains shell metacharacters in arguments",
@@ -667,8 +713,12 @@ def _check_mid_word_hash(command: str) -> BashSecurityResult:
 
     shell-quote treats mid-word ``#`` as comment-start, but bash treats
     it as a literal character. Detect ``\\S#`` outside ``${#`` patterns.
+
+    Uses ``_extract_unquoted_keep_delimiters`` (matching the TS
+    ``unquotedKeepQuoteChars``) so that ``'x'#`` is preserved as
+    ``''#`` — the quote delimiter is adjacent to ``#``, not whitespace.
     """
-    unquoted = _extract_unquoted(command)
+    unquoted = _extract_unquoted_keep_delimiters(command)
 
     # Also check continuation-joined version: foo\<NL>#bar
     joined = re.sub(
