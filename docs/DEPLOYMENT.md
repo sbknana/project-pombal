@@ -4,448 +4,457 @@
 
 - [DEPLOYMENT.md](#deploymentmd)
   - [TL;DR](#tldr)
-- [Open Claude Desktop / Claude Code, point it at your project](#open-claude-desktop-claude-code-point-it-at-your-project)
-- [Talk to Claude: "Create a task to add input validation to the user signup endpoint"](#talk-to-claude-create-a-task-to-add-input-validation-to-the-user-signup-endpoint)
-  - [How EQUIPA Actually Works](#how-equipa-actually-works)
+- [Install (Linux/macOS/WSL)](#install-linuxmacoswsl)
+- [Or manual setup](#or-manual-setup)
   - [Prerequisites](#prerequisites)
   - [Step-by-Step Setup](#step-by-step-setup)
-    - [1. Clone the repo](#1-clone-the-repo)
+    - [1. Clone the repository](#1-clone-the-repository)
     - [2. Run the setup wizard](#2-run-the-setup-wizard)
     - [3. Set your API key](#3-set-your-api-key)
-    - [4. Initialize the database](#4-initialize-the-database)
-    - [5. Configure Claude Desktop (MCP Server)](#5-configure-claude-desktop-mcp-server)
-    - [6. Verify it works](#6-verify-it-works)
-    - [7. Run the tests (optional, but recommended)](#7-run-the-tests-optional-but-recommended)
+    - [4. Verify installation](#4-verify-installation)
   - [Environment Variables](#environment-variables)
   - [Running in Production](#running-in-production)
-    - [Option A: Systemd service (Linux)](#option-a-systemd-service-linux)
-    - [Option B: ForgeSmith cron (self-improvement loop)](#option-b-forgesmith-cron-self-improvement-loop)
-- [Run ForgeSmith every 6 hours](#run-forgesmith-every-6-hours)
-- [Run SIMBA (rule generation) daily](#run-simba-rule-generation-daily)
-- [Run GEPA (prompt evolution) weekly](#run-gepa-prompt-evolution-weekly)
-    - [Option C: Nightly review](#option-c-nightly-review)
+    - [Option 1: CLI (automation/scripting)](#option-1-cli-automationscripting)
+- [Dispatch a single task](#dispatch-a-single-task)
+- [Auto-dispatch from goals.txt](#auto-dispatch-from-goalstxt)
+- [Run multiple tasks in parallel](#run-multiple-tasks-in-parallel)
+    - [Option 2: MCP Server (conversational with Claude Desktop)](#option-2-mcp-server-conversational-with-claude-desktop)
+    - [Option 3: systemd Service (Linux)](#option-3-systemd-service-linux)
+    - [Option 4: PM2 (Node.js process manager)](#option-4-pm2-nodejs-process-manager)
   - [Docker](#docker)
-- [That's it. No pip install. No requirements.txt. Zero dependencies.](#thats-it-no-pip-install-no-requirementstxt-zero-dependencies)
-- [Create data directory for SQLite DB and logs](#create-data-directory-for-sqlite-db-and-logs)
-- [Initialize the database](#initialize-the-database)
-- [MCP server](#mcp-server)
-    - [Docker Compose (if you also run Ollama locally)](#docker-compose-if-you-also-run-ollama-locally)
   - [Troubleshooting](#troubleshooting)
-    - ["ANTHROPIC_API_KEY not set"](#anthropic_api_key-not-set)
-- [or add to ~/.bashrc and source it](#or-add-to-bashrc-and-source-it)
-    - [Database migration errors](#database-migration-errors)
-- [Back up first, then force re-migrate](#back-up-first-then-force-re-migrate)
-    - [MCP server not connecting in Claude Desktop](#mcp-server-not-connecting-in-claude-desktop)
-    - ["Permission denied" on project directories](#permission-denied-on-project-directories)
-    - [Agent stuck in a loop](#agent-stuck-in-a-loop)
-- [Find the relevant agent log and read it](#find-the-relevant-agent-log-and-read-it)
-    - [Port already in use](#port-already-in-use)
-- [Find what's using the port](#find-whats-using-the-port)
+    - [Port already in use (MCP server)](#port-already-in-use-mcp-server)
+- [Find process using the port](#find-process-using-the-port)
 - [Kill it](#kill-it)
-    - [SQLite "database is locked"](#sqlite-database-is-locked)
-- [Check for stuck processes](#check-for-stuck-processes)
-- [Kill any zombie processes](#kill-any-zombie-processes)
-    - [Tests failing](#tests-failing)
-- [Run with verbose output to see what's wrong](#run-with-verbose-output-to-see-whats-wrong)
-    - [Ollama connection refused](#ollama-connection-refused)
-- [Check if Ollama is running](#check-if-ollama-is-running)
-- [If not, start it](#if-not-start-it)
+- [Or change MCP server port in dispatch_config.json](#or-change-mcp-server-port-in-dispatch_configjson)
+    - [Database locked](#database-locked)
+    - [Missing dependencies (if you installed manually)](#missing-dependencies-if-you-installed-manually)
+- [Make sure you are in the equipa directory](#make-sure-you-are-in-the-equipa-directory)
+- [Run setup again](#run-setup-again)
+    - [ForgeSmith not running nightly](#forgesmith-not-running-nightly)
+- [Should see: 0 2 * * * cd ~/.forge && python3 -m scripts.forgesmith --full](#should-see-0-2-cd-forge-python3-m-scriptsforgesmith-full)
+- [If missing, re-run setup wizard and answer yes to cron setup](#if-missing-re-run-setup-wizard-and-answer-yes-to-cron-setup)
+    - [Agent gets stuck / infinite loop](#agent-gets-stuck-infinite-loop)
+    - [Cost overrun](#cost-overrun)
+    - [Tests fail after dispatch](#tests-fail-after-dispatch)
+    - [Ollama embeddings not working](#ollama-embeddings-not-working)
+- [Check Ollama is running](#check-ollama-is-running)
+- [Should return list of models](#should-return-list-of-models)
+- [If not, start Ollama](#if-not-start-ollama)
+- [Pull embedding model if missing](#pull-embedding-model-if-missing)
+    - [Git worktree merge conflicts](#git-worktree-merge-conflicts)
+    - [Preflight check fails](#preflight-check-fails)
   - [Current Limitations](#current-limitations)
+  - [What's Next](#whats-next)
   - [Related Documentation](#related-documentation)
 
 ## TL;DR
 
 ```bash
-git clone https://github.com/sbknana/equipa.git && cd equipa-repo
-python3 equipa_setup.py          # interactive setup wizard — does everything
-# Open Claude Desktop / Claude Code, point it at your project
-# Talk to Claude: "Create a task to add input validation to the user signup endpoint"
+# Install (Linux/macOS/WSL)
+curl -sSL https://raw.githubusercontent.com/yourusername/equipa/main/equipa_setup.py | python3 -
+
+# Or manual setup
+git clone https://github.com/yourusername/equipa.git
+cd equipa
+python3 equipa_setup.py
+python3 -m equipa.cli --help
 ```
 
-That's it. You talk to Claude, Claude runs EQUIPA. Most users never touch the CLI directly.
-
----
-
-## How EQUIPA Actually Works
-
-You don't run EQUIPA commands. You **talk to Claude**.
-
-Claude reads your project, creates tasks, dispatches AI agents (developer, tester, reviewer, security auditor, etc.), monitors their progress, and reports back. The conversation looks like:
-
-> **You:** "The login endpoint has no rate limiting. Fix it and add tests."
->
-> **Claude:** Creates a task, dispatches a developer agent, waits for it to finish, runs the tester agent, checks results, reports back with what changed.
-
-The CLI exists for automation and scripting, but the primary interface is conversation.
+Done. You now have a working EQUIPA install. Talk to Claude, tell it what to build.
 
 ---
 
 ## Prerequisites
 
-| Tool | Version | Why | Install |
-|------|---------|-----|---------|
-| Python | 3.10+ | Everything runs on Python stdlib | [python.org](https://www.python.org/downloads/) |
-| Git | 2.x+ | Worktree isolation for parallel agents | [git-scm.com](https://git-scm.com/) |
-| SQLite | 3.35+ | Ships with Python, but check version | Bundled with Python |
-| Claude Desktop or Claude Code | Latest | The conversational interface — how you actually use EQUIPA | [claude.ai/download](https://claude.ai/download) |
-| Anthropic API key | — | Agents need to call Claude API | [console.anthropic.com](https://console.anthropic.com/) |
+**Required:**
+- Python 3.10+ ([python.org](https://www.python.org/downloads/))
+- SQLite3 (usually bundled with Python)
+- Git ([git-scm.com](https://git-scm.com/downloads))
+- Anthropic API key ([console.anthropic.com](https://console.anthropic.com/))
 
-**Optional:**
+**Optional (for Ollama support):**
+- Ollama ([ollama.ai](https://ollama.ai/download))
 
-| Tool | Why |
-|------|-----|
-| Ollama | Local model support for cost-sensitive tasks |
-| `gh` CLI | Auto-creates PRs from agent work |
+**Platform notes:**
+- Windows: Use WSL2. Native Windows support exists but WSL is smoother.
+- macOS: Works out of the box.
+- Linux: Works out of the box.
 
-Check your setup:
-
+Check versions:
 ```bash
-python3 --version   # needs 3.10+
-git --version       # needs 2.x+
-sqlite3 --version   # needs 3.35+
+python3 --version  # Should be 3.10 or higher
+git --version
+sqlite3 --version
 ```
 
 ---
 
 ## Step-by-Step Setup
 
-### 1. Clone the repo
-
+### 1. Clone the repository
 ```bash
-git clone https://github.com/sbknana/equipa.git
-cd equipa-repo
+git clone https://github.com/yourusername/equipa.git
+cd equipa
 ```
 
 ### 2. Run the setup wizard
-
 ```bash
 python3 equipa_setup.py
 ```
 
-This walks you through everything interactively:
-- Checks prerequisites
-- Picks an install path
-- Creates the SQLite database (30+ tables)
-- Generates config files
-- Sets up MCP server config for Claude Desktop
-- Generates the `.claude/` directory and `CLAUDE.md` for Claude Code
-- Optionally sets up ForgeSmith cron job (the self-improvement loop)
+This wizard:
+- Checks prerequisites (Python, Git, SQLite)
+- Creates `~/.forge/` directory structure
+- Initializes SQLite database with 30+ tables
+- Copies prompts, skills, and scripts
+- Generates `dispatch_config.json` and MCP server configs
+- Offers to set up ForgeSmith nightly cron (Linux) or Task Scheduler (Windows)
+
+**Answer the prompts:**
+- Install path: Default is `~/.forge/` — hit Enter or specify custom path
+- Database path: Default is `~/.forge/equipa.db` — hit Enter or specify custom path
+- MCP server setup: Say yes if using Claude Desktop
+- ForgeSmith cron: Say yes for automatic self-improvement (recommended)
 
 ### 3. Set your API key
-
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
-Add it to your shell profile so it persists:
-
+Add to `~/.bashrc` or `~/.zshrc` to persist:
 ```bash
 echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-### 4. Initialize the database
-
-The setup wizard handles this, but if you need to do it manually or run migrations on an existing install:
-
+### 4. Verify installation
 ```bash
-python3 db_migrate.py
+python3 -m equipa.cli --version
+python3 -m equipa.cli task status
 ```
 
-This is idempotent — safe to run multiple times. It auto-detects your current schema version and migrates forward.
+If you see version info and a task table (even if empty), you are good.
 
-### 5. Configure Claude Desktop (MCP Server)
+---
 
-The setup wizard generates this, but here's what goes in your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+## Environment Variables
+
+| Name | Description | Example | Required? |
+|------|-------------|---------|-----------|
+| `ANTHROPIC_API_KEY` | Your Anthropic API key for Claude | `sk-ant-api03-...` | **Yes** |
+| `EQUIPA_DB_PATH` | Path to SQLite database | `~/.forge/equipa.db` | No (defaults to install path) |
+| `OLLAMA_BASE_URL` | Ollama server URL for embeddings/local models | `http://localhost:11434` | No (only if using Ollama) |
+| `EQUIPA_LOG_LEVEL` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR` | `INFO` | No (defaults to `INFO`) |
+| `EQUIPA_MAX_COST` | Global cost limit per task (USD) | `5.00` | No (per-task limits in dispatch config) |
+
+---
+
+## Running in Production
+
+### Option 1: CLI (automation/scripting)
+```bash
+# Dispatch a single task
+python3 -m equipa.cli dispatch --task-id 42
+
+# Auto-dispatch from goals.txt
+python3 -m equipa.cli auto-dispatch --goals goals.txt
+
+# Run multiple tasks in parallel
+python3 -m equipa.cli parallel --task-ids 10,11,12
+```
+
+### Option 2: MCP Server (conversational with Claude Desktop)
+**This is the primary usage model.**
+
+Add to Claude Desktop's MCP config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 
 ```json
 {
   "mcpServers": {
     "equipa": {
       "command": "python3",
-      "args": ["/path/to/equipa/equipa/mcp_server.py"],
+      "args": ["-m", "equipa.mcp_server"],
       "env": {
-        "ANTHROPIC_API_KEY": "sk-ant-...",
-        "EQUIPA_DB": "/path/to/equipa/forge.db"
+        "ANTHROPIC_API_KEY": "sk-ant-..."
       }
     }
   }
 }
 ```
 
-Replace the paths with your actual install location. Restart Claude Desktop after editing.
+Restart Claude Desktop. Now you can:
+- "Create a task to add login validation"
+- "Dispatch task 15"
+- "Show me the last 5 lessons learned"
+- "What's the status of project NewsReader?"
 
-### 6. Verify it works
+Claude handles task creation, agent dispatch, progress tracking, and reporting. You never touch the CLI.
 
-```bash
-python3 -m equipa.cli --help
-```
-
-Or just open Claude and say: *"Show me the current task status for all projects."*
-
-If the MCP server is configured correctly, Claude will query your EQUIPA database and respond.
-
-### 7. Run the tests (optional, but recommended)
-
-```bash
-python3 -m pytest tests/ -v
-```
-
-334+ tests, all pure Python, no dependencies to install.
-
----
-
-## Environment Variables
-
-| Variable | Description | Example | Required? |
-|----------|-------------|---------|-----------|
-| `ANTHROPIC_API_KEY` | API key for Claude — agents use this | `sk-ant-api03-...` | **Yes** |
-| `EQUIPA_DB` | Path to SQLite database | `/home/user/equipa/forge.db` | Yes (set by setup wizard) |
-| `EQUIPA_BASE` | Base directory for EQUIPA install | `/home/user/equipa` | Yes (set by setup wizard) |
-| `OLLAMA_BASE_URL` | Ollama server URL for local models | `http://localhost:11434` | No |
-| `EQUIPA_LOG_DIR` | Where agent logs go | `/home/user/equipa/logs` | No (defaults to `./logs`) |
-| `EQUIPA_MAX_COST` | Global cost cap per agent run (USD) | `2.00` | No (defaults from config) |
-| `EQUIPA_DRY_RUN` | Set to `1` to prevent actual changes | `1` | No |
-
----
-
-## Running in Production
-
-### Option A: Systemd service (Linux)
-
-Create `/etc/systemd/system/equipa-mcp.service`:
+### Option 3: systemd Service (Linux)
+Create `/etc/systemd/system/equipa-worker.service`:
 
 ```ini
 [Unit]
-Description=EQUIPA MCP Server
+Description=EQUIPA Auto-Dispatch Worker
 After=network.target
 
 [Service]
 Type=simple
 User=youruser
-Environment=ANTHROPIC_API_KEY=sk-ant-...
-Environment=EQUIPA_DB=/home/youruser/equipa/forge.db
-ExecStart=/usr/bin/python3 /home/youruser/equipa/equipa/mcp_server.py
+WorkingDirectory=/home/youruser/.forge
+Environment="ANTHROPIC_API_KEY=sk-ant-..."
+ExecStart=/usr/bin/python3 -m equipa.cli auto-dispatch --goals /home/youruser/.forge/goals.txt --loop
 Restart=on-failure
-RestartSec=5
+RestartSec=30
 
 [Install]
 WantedBy=multi-user.target
 ```
 
+Enable and start:
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable equipa-mcp
-sudo systemctl start equipa-mcp
-sudo systemctl status equipa-mcp
+sudo systemctl enable equipa-worker
+sudo systemctl start equipa-worker
+sudo systemctl status equipa-worker
 ```
 
-### Option B: ForgeSmith cron (self-improvement loop)
-
-The setup wizard offers to set this up. It runs ForgeSmith periodically to analyze agent performance and adjust prompts/config:
-
+### Option 4: PM2 (Node.js process manager)
 ```bash
-# The setup wizard (equipa_setup.py) auto-configures this for your OS:
-# - Linux/WSL: cron job
-# - Windows: Task Scheduler (schtasks)
-#
-# To set up manually:
-
-# Linux/WSL — add to crontab:
-0 0 * * * cd /path/to/equipa && python3 forgesmith.py --auto >> forgesmith.log 2>&1
-
-# Windows — create scheduled task:
-# schtasks /create /tn "EQUIPA_ForgeSmith_Nightly" /tr "python forgesmith.py --auto" /sc daily /st 00:00 /f
-
-# GEPA prompt evolution (weekly recommended):
-0 3 * * 0 cd /path/to/equipa && python3 forgesmith_gepa.py --evolve >> gepa.log 2>&1
-
-# SIMBA vector memory maintenance (daily):
-30 0 * * * cd /path/to/equipa && python3 forgesmith.py --simba-maintenance >> simba.log 2>&1
-
-### Option C: Nightly review
-
-Get a daily digest of what happened across all projects:
-
-```bash
-0 22 * * * python3 /home/youruser/equipa/scripts/nightly_review.py >> /home/youruser/equipa/logs/nightly.log 2>&1
+npm install -g pm2
+pm2 start python3 --name equipa -- -m equipa.cli auto-dispatch --goals goals.txt --loop
+pm2 save
+pm2 startup  # Follow instructions to persist across reboots
 ```
 
 ---
 
 ## Docker
 
-EQUIPA has zero dependencies, so the Dockerfile is refreshingly simple:
-
+**Dockerfile:**
 ```dockerfile
-FROM python:3.12-slim
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y \
+    git \
+    sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+COPY . /app
 
-# That's it. No pip install. No requirements.txt. Zero dependencies.
-COPY . .
+RUN python3 equipa_setup.py --non-interactive --install-path /root/.forge
 
-# Create data directory for SQLite DB and logs
-RUN mkdir -p /data/logs
+ENV ANTHROPIC_API_KEY=""
+ENV EQUIPA_DB_PATH="/root/.forge/equipa.db"
 
-ENV EQUIPA_DB=/data/forge.db
-ENV EQUIPA_LOG_DIR=/data/logs
-
-# Initialize the database
-RUN python3 db_migrate.py || true
-
-# MCP server
-EXPOSE 8080
-
-CMD ["python3", "equipa/mcp_server.py"]
+CMD ["python3", "-m", "equipa.cli", "auto-dispatch", "--goals", "/root/.forge/goals.txt", "--loop"]
 ```
 
-Build and run:
-
+**Build and run:**
 ```bash
-docker build -t equipa .
+docker build -t equipa:latest .
 docker run -d \
-  --name equipa \
+  --name equipa-worker \
   -e ANTHROPIC_API_KEY="sk-ant-..." \
-  -v equipa-data:/data \
-  equipa
+  -v $(pwd)/goals.txt:/root/.forge/goals.txt \
+  -v equipa-data:/root/.forge \
+  equipa:latest
 ```
 
-The `-v equipa-data:/data` persists your database and logs across container restarts.
-
-### Docker Compose (if you also run Ollama locally)
-
+**docker-compose.yml:**
 ```yaml
 version: '3.8'
 services:
   equipa:
     build: .
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - EQUIPA_DB=/data/forge.db
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
     volumes:
-      - equipa-data:/data
-      - ./projects:/projects  # mount your project repos here
-    depends_on:
-      - ollama
-
-  ollama:
-    image: ollama/ollama
-    volumes:
-      - ollama-models:/root/.ollama
+      - ./goals.txt:/root/.forge/goals.txt
+      - equipa-data:/root/.forge
+    restart: unless-stopped
 
 volumes:
   equipa-data:
-  ollama-models:
+```
+
+Run with:
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+docker-compose up -d
 ```
 
 ---
 
 ## Troubleshooting
 
-### "ANTHROPIC_API_KEY not set"
+### Port already in use (MCP server)
+**Symptom:** `OSError: [Errno 48] Address already in use`
 
+**Fix:**
 ```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-# or add to ~/.bashrc and source it
-```
-
-### Database migration errors
-
-```bash
-# Back up first, then force re-migrate
-cp forge.db forge.db.backup
-python3 db_migrate.py
-```
-
-Migrations are idempotent. Running them twice won't break anything.
-
-### MCP server not connecting in Claude Desktop
-
-1. Check the config path is correct in `claude_desktop_config.json`
-2. Make sure the Python path is absolute, not relative
-3. Restart Claude Desktop completely (quit and reopen, not just close the window)
-4. Check logs: `tail -f ~/Library/Logs/Claude/mcp*.log` (macOS)
-
-### "Permission denied" on project directories
-
-Agents need read/write access to the project directory they're working on:
-
-```bash
-chmod -R u+rw /path/to/your/project
-```
-
-### Agent stuck in a loop
-
-This happens. EQUIPA has loop detection that kills agents after repeated identical outputs, but sometimes agents spin on a problem without making progress. Check the logs:
-
-```bash
-ls -la logs/
-# Find the relevant agent log and read it
-```
-
-You can also ask Claude: *"What's the status of task 42? Is the agent stuck?"*
-
-### Port already in use
-
-```bash
-# Find what's using the port
-lsof -i :8080
+# Find process using the port
+lsof -i :8765
 # Kill it
 kill -9 <PID>
+# Or change MCP server port in dispatch_config.json
 ```
 
-### SQLite "database is locked"
+### Database locked
+**Symptom:** `sqlite3.OperationalError: database is locked`
 
-Usually means two processes are trying to write simultaneously. EQUIPA uses WAL mode to minimize this, but it can still happen:
+**Fix:**
+- Only one writer at a time. Check for running agents:
+  ```bash
+  ps aux | grep equipa
+  pkill -9 -f equipa
+  ```
+- Or enable WAL mode (setup wizard does this automatically):
+  ```bash
+  sqlite3 ~/.forge/equipa.db "PRAGMA journal_mode=WAL;"
+  ```
 
+### Missing dependencies (if you installed manually)
+**Symptom:** `ModuleNotFoundError: No module named 'equipa'`
+
+**Fix:**
 ```bash
-# Check for stuck processes
-ps aux | grep equipa
-# Kill any zombie processes
+# Make sure you are in the equipa directory
+cd /path/to/equipa
+# Run setup again
+python3 equipa_setup.py
 ```
 
-### Tests failing
+### ForgeSmith not running nightly
+**Symptom:** No self-improvement changes after a week
 
+**Fix (Linux/WSL):**
 ```bash
-# Run with verbose output to see what's wrong
-python3 -m pytest tests/ -v --tb=short
+crontab -l  # Check if cron job exists
+# Should see: 0 2 * * * cd ~/.forge && python3 -m scripts.forgesmith --full
+# If missing, re-run setup wizard and answer yes to cron setup
 ```
 
-Make sure you're not running tests against a production database. Tests use temporary databases.
+**Fix (Windows Task Scheduler):**
+- Open Task Scheduler
+- Look for "EQUIPA ForgeSmith Nightly"
+- If missing, re-run setup wizard
 
-### Ollama connection refused
+### Agent gets stuck / infinite loop
+**Symptom:** Agent uses all 15 turns reading files, never writes code
 
-If you're using local models:
+**Fix:**
+- Check agent logs: `~/.forge/logs/<task_id>/agent_<role>.log`
+- Look for loop detection warnings (EQUIPA kills agents after 3 identical outputs)
+- If legitimate complex task, increase max turns in `dispatch_config.json`:
+  ```json
+  "cost_controls": {
+    "default_max_turns": 20
+  }
+  ```
 
+### Cost overrun
+**Symptom:** Task costs $10 instead of expected $0.50
+
+**Fix:**
+- Check dispatch config cost limits:
+  ```json
+  "cost_controls": {
+    "cost_limit_low_usd": 0.50,
+    "cost_limit_medium_usd": 2.00,
+    "cost_limit_high_usd": 5.00
+  }
+  ```
+- Review agent logs — long conversations mean model is struggling
+- Consider complexity routing: complex tasks get Opus (expensive), trivial tasks get Haiku (cheap)
+
+### Tests fail after dispatch
+**Symptom:** Agent says "tests pass" but `pytest` shows failures
+
+**Fix:**
+- Agent assumes your test suite works. If tests are broken, fix them first.
+- Check test logs: `~/.forge/logs/<task_id>/test_output.txt`
+- Tester role only works if `pytest`, `npm test`, `go test`, etc. are runnable
+
+### Ollama embeddings not working
+**Symptom:** No vector similarity in lesson retrieval
+
+**Fix:**
 ```bash
-# Check if Ollama is running
-curl http://localhost:11434/api/version
-
-# If not, start it
+# Check Ollama is running
+curl http://localhost:11434/api/tags
+# Should return list of models
+# If not, start Ollama
 ollama serve
+# Pull embedding model if missing
+ollama pull nomic-embed-text
 ```
+
+### Git worktree merge conflicts
+**Symptom:** `git worktree prune` shows conflicts after agent run
+
+**Fix:**
+- EQUIPA uses worktrees to isolate agent changes
+- If merge fails, check `.forge-worktrees/` directory
+- Manual merge:
+  ```bash
+  cd .forge-worktrees/<task_id>
+  git status
+  # Resolve conflicts
+  git add .
+  git commit -m "Resolve conflicts"
+  cd ../..
+  python3 -m equipa.cli task status <task_id>  # Retry merge
+  ```
+
+### Preflight check fails
+**Symptom:** "Preflight build failed — dependencies not installed"
+
+**Fix:**
+- Preflight auto-installs deps if `auto_install_dependencies: true` in dispatch config
+- Manual install:
+  ```bash
+  cd /path/to/project
+  # Python
+  pip install -r requirements.txt
+  # Node
+  npm install
+  # Go
+  go mod download
+  ```
 
 ---
 
 ## Current Limitations
 
-Being honest here:
+Be honest — here's what does not work well yet:
 
-- **Agents still get stuck on complex tasks.** Analysis paralysis is real — sometimes an agent reads code for 10 turns without making a change. The early termination system kills these, but that means the task doesn't get done. You'll need to break complex tasks into smaller pieces.
+- **Agents get stuck on complex tasks.** If a task needs 20+ turns of reading, the agent might hit max turns before writing code. Analysis paralysis is real.
+- **Git worktree merges occasionally need manual intervention.** Automatic merge works 90% of the time. The other 10% you will fix conflicts by hand.
+- **Self-improvement needs 20-30 tasks before patterns emerge.** ForgeSmith learns from failures. If you have run 5 tasks, it has nothing to learn from yet.
+- **Tester role depends on a working test suite.** If `pytest` or `npm test` does not run, Tester cannot verify anything.
+- **Early termination kills agents at 10 turns of reading.** Some legitimate complex tasks need more. Tune `max_turns` in dispatch config if this happens.
+- **Cost routing is not magic.** Haiku is cheap and dumb. Opus is expensive and smart. Medium tasks might get routed wrong — check logs.
+- **No web UI.** CLI and MCP only. A dashboard exists (`tools/forge_dashboard.py`) but it is read-only stats, not a control panel.
 
-- **Git worktree merges occasionally need manual intervention.** Parallel agents work in isolated worktrees, which is great, until they both modify the same file. Merge conflicts happen. You'll sometimes need to resolve them by hand.
+---
 
-- **Self-improvement takes time.** ForgeSmith + GEPA + SIMBA need 20-30 completed tasks before patterns emerge and the system starts making useful adjustments. Don't expect magic on day one.
+## What's Next
 
-- **Tester role needs a working test suite.** If your project doesn't have tests, the tester agent doesn't have much to work with. It'll try to create tests, but it works way better when there's an existing test framework to build on.
+After setup:
+1. **Talk to Claude.** Say "Create a task to add input validation to the login form."
+2. **Let agents run.** Claude dispatches tasks, monitors progress, reports results.
+3. **Check results.** Look at git diffs, test output, agent logs.
+4. **Iterate.** If agents fail, they retry up to 3 times automatically. If still stuck, task goes to blockers queue.
 
-- **Early termination is aggressive.** Agents get killed after 10 turns of just reading without making changes. Most of the time this is correct (the agent is stuck), but some genuinely complex tasks need more exploration time. This threshold is configurable in `dispatch_config.json`.
+ForgeSmith runs nightly to analyze failures and improve prompts. After a few weeks, agents get better at your project's patterns.
 
-- **Cost can add up.** Each agent run calls the Claude API. Complex tasks with retries can cost $1-5 per task. The cost controls help, but keep an eye on your API usage, especially early on while you're tuning things.
-
-- **It's not magic.** Agents still fail, get confused, produce wrong code, and waste turns. EQUIPA makes AI agents useful enough to actually ship code, but someone still needs to review what comes out.
+**Read next:**
+- `README.md` — architecture, roles, self-improvement loop
+- `CLAUDE.md` — file map, schema, integration points
+- `docs/` — deep dives on specific subsystems
 ---
 
 ## Related Documentation

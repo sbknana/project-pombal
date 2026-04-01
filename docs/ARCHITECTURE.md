@@ -9,40 +9,22 @@
   - [Database](#database)
   - [Project Structure](#project-structure)
   - [Key Design Decisions](#key-design-decisions)
-    - [Why zero dependencies?](#why-zero-dependencies)
-    - [Why SQLite, not Postgres?](#why-sqlite-not-postgres)
-    - [Why subprocess for Claude API calls?](#why-subprocess-for-claude-api-calls)
-    - [The anti-compaction trick](#the-anti-compaction-trick)
-    - [Prompt cache splitting](#prompt-cache-splitting)
-    - [9 roles, not 1 generalist](#9-roles-not-1-generalist)
-    - [Circuit breaker on model routing](#circuit-breaker-on-model-routing)
-    - [Loop detection fingerprinting](#loop-detection-fingerprinting)
-    - [Bash security is paranoid](#bash-security-is-paranoid)
-    - [Self-improvement is a closed loop](#self-improvement-is-a-closed-loop)
   - [Current Limitations](#current-limitations)
   - [Related Documentation](#related-documentation)
 
 ## How It Works
 
-You talk to Claude. That's it. You say "add pagination to the users API" and Claude breaks it down, dispatches agents, monitors progress, and tells you when it's done. Most users never touch a CLI.
+You open Claude Desktop. You say "fix the login bug" or "add dark mode to the settings page". Claude creates a task in TheForge (EQUIPA's SQLite database), picks the right agent role, and dispatches it.
 
-Here's what happens under the hood when you ask for something:
+Behind the scenes, EQUIPA spins up a specialized agent — maybe Developer for writing code, or Tester for running your test suite. The agent works in an isolated git worktree so it can't trash your main branch. It reads files, writes code, runs tests, commits changes. If tests fail, Developer hands off to Tester. If there are security issues, SecurityReviewer steps in.
 
-1. **Claude receives your request** in plain conversation. It figures out what needs doing and creates tasks in the SQLite database.
+Each agent turn is one API call to Claude. The agent sees the task description, relevant code context, and tools (read_file, bash, edit_file, etc). It picks a tool, executes it, sees the result, picks another tool. This loops until the task succeeds, the agent runs out of turns (default 35), or it gets stuck.
 
-2. **The dispatcher** (`equipa/dispatch.py`) picks up pending work, scores each task by project priority, and decides which agent roles to spin up. It also routes each task to the right AI model tier based on complexity — simple stuff gets the cheap model, gnarly stuff gets the expensive one.
+When an agent finishes, EQUIPA saves an "episode" — what worked, what failed, how many turns it took, what files changed. ForgeSmith (the self-improvement engine) reads these episodes every night, spots patterns in failures, and evolves agent prompts or config settings to fix recurring problems.
 
-3. **Agents get dispatched** — up to 9 specialized roles (developer, tester, security reviewer, planner, evaluator, etc.). Each agent gets a system prompt tailored to its role *and* the project's programming language. The prompts include lessons learned from past runs and episodic memory from similar tasks.
+If an agent fails, EQUIPA auto-retries up to 3 times. Each retry gets a fresh git worktree. After 3 failures, the task goes to "blocked" status and you get a summary of what went wrong.
 
-4. **The dev-test loop kicks in.** The developer writes code, the tester runs tests. If tests fail, the developer gets the failure context and tries again. This keeps going until tests pass or the budget runs out.
-
-5. **Cost controls watch everything.** Each agent has a turn limit and a dollar cost ceiling that scales with task complexity. If an agent starts looping (doing the same thing over and over), the loop detector catches it and kills the run. Monologue detection kills agents that just talk without using tools.
-
-6. **Results flow back to Claude**, who reports them to you in conversation. Task statuses update in the database. Agent episodes get recorded with reflections and Q-values for future reference.
-
-7. **ForgeSmith runs on a schedule** (usually nightly via cron). It analyzes all recent agent runs, extracts lessons from failures, tunes configuration, and evolves prompts. Two subsystems — GEPA (prompt evolution) and SIMBA (situational rules) — feed into this. It takes 20-30 tasks before the self-improvement loop starts showing real patterns.
-
-The whole thing runs on pure Python stdlib with SQLite. No pip install. No Docker. Copy the files, run setup, go.
+You never touch the CLI. You just talk to Claude. Claude reads task status, checks logs, and reports back. "The feature is done, tests pass, branch is ready for review."
 
 ---
 
@@ -50,259 +32,247 @@ The whole thing runs on pure Python stdlib with SQLite. No pip install. No Docke
 
 ```mermaid
 graph TD
-    User[You / Claude conversation] -->|creates tasks| DB[(SQLite Database)]
-    DB -->|pending work| Dispatcher[Dispatcher]
-    Dispatcher -->|routes by complexity| Router[Cost Router]
-    Router -->|selects model tier| AgentRunner[Agent Runner]
-    AgentRunner -->|spawns| Agents[9 Agent Roles]
-    Agents -->|tool calls| Tools[File/Bash/Search Tools]
-    Agents -->|results| DB
-    DB -->|episodes + lessons| Memory[Episodic Memory]
-    Memory -->|injected into prompts| Agents
-    DB -->|nightly analysis| ForgeSmith[ForgeSmith Self-Improvement]
-    ForgeSmith -->|GEPA + SIMBA| Prompts[Evolved Prompts]
-    Prompts -->|next dispatch| AgentRunner
+    User[You talk to Claude] -->|plain English| Claude[Claude Desktop + MCP]
+    Claude -->|dispatch task| DB[TheForge SQLite]
+    DB --> Orchestrator[equipa/cli.py]
+    Orchestrator --> Planner[Plan task scope]
+    Planner --> Dispatcher[Pick agent role]
+    Dispatcher --> Agent[Isolated Agent + Worktree]
+    Agent -->|read/write/bash| Tools[File + Git + Bash Tools]
+    Tools --> Agent
+    Agent -->|success/fail| Episode[Record Episode]
+    Episode --> DB
+    DB -->|nightly| ForgeSmith[Self-Improvement Loop]
+    ForgeSmith -->|evolve prompts| Prompts[Agent Prompts]
+    Prompts --> Agent
 ```
+
+**Key insight:** Most users never run `python -m equipa`. They just talk to Claude, who uses the MCP server (`equipa/mcp_server.py`) to create/dispatch/monitor tasks. The CLI exists for scripting and automation, but the primary interface is conversational.
 
 ---
 
 ## Data Flow
 
-A typical task dispatch, from your words to working code:
-
 ```mermaid
 sequenceDiagram
-    participant User as You (via Claude)
-    participant CLI as equipa/cli.py
-    participant Dispatch as Dispatcher
-    participant Router as Cost Router
-    participant Runner as Agent Runner
-    participant Agent as Claude Agent
-    participant Tools as File/Bash Tools
-    participant DB as SQLite DB
-    participant Memory as Episodic Memory
+    participant User
+    participant Claude
+    participant MCP as MCP Server
+    participant DB as SQLite
+    participant Agent
+    participant Git
 
-    User->>CLI: "dispatch task 42"
-    CLI->>DB: fetch task details
-    DB-->>CLI: task + project context
-    CLI->>Dispatch: score and filter work
-    Dispatch->>Router: score_complexity(task)
-    Router-->>Dispatch: model tier (haiku/sonnet/opus)
-    Dispatch->>Runner: launch agent with prompt
-    Runner->>Memory: get relevant episodes + lessons
-    Memory-->>Runner: past successes/failures for this role
-    Runner->>Agent: system prompt + task + memory
-    loop Dev-Test Loop
-        Agent->>Tools: read_file, write_file, bash
-        Tools-->>Agent: file contents, command output
-        Agent->>Runner: result with reflection
-        Runner->>Runner: loop detection + cost check
+    User->>Claude: "Add login rate limiting"
+    Claude->>MCP: task_create(title, description)
+    MCP->>DB: INSERT INTO tasks
+    DB-->>MCP: task_id=42
+    MCP-->>Claude: Task 42 created
+    Claude->>MCP: dispatch(task_id=42, role=developer)
+    MCP->>Agent: spawn with worktree
+    Agent->>Git: git worktree add
+    Git-->>Agent: isolated branch
+    loop Agent Turn (max 35)
+        Agent->>Agent: read context, pick tool
+        Agent->>DB: log action
+        Agent->>Git: read/write/test
+        Git-->>Agent: result
+        Agent->>Agent: check if done
     end
-    Runner->>DB: store result, episode, Q-value
-    DB-->>CLI: task status updated
-    CLI-->>User: "Task 42 done — 3 files changed"
+    Agent->>DB: record episode
+    Agent->>Git: git add + commit
+    Git-->>Agent: SHA
+    Agent-->>MCP: status=completed
+    MCP-->>Claude: "Task done. 12 turns. 3 files changed."
+    Claude-->>User: "Rate limiting added. Branch forge/task-42 ready."
 ```
 
 ---
 
 ## Database
 
-The schema has 30+ tables. Here are the ones that matter most:
-
 ```mermaid
 erDiagram
-    projects ||--o{ tasks : contains
-    tasks ||--o{ agent_runs : "dispatched as"
-    agent_runs ||--o{ agent_episodes : "produces"
-    agent_runs ||--o{ agent_actions : "logs"
-    agent_episodes ||--o{ episode_embeddings : "vectorized"
-    lessons ||--o{ lesson_embeddings : "vectorized"
-    simba_rules ||--o{ simba_evaluations : "scored by"
-    forgesmith_runs ||--o{ forgesmith_changes : "produces"
-    agent_runs ||--o{ rubric_scores : "scored by"
-
-    projects {
-        int id PK
-        text name
-        text repo_path
-        text language
-    }
+    tasks ||--o{ agent_runs : has
+    tasks ||--o{ session_notes : references
     tasks {
         int id PK
-        int project_id FK
-        text title
+        string title
         text description
-        text status
-        text priority
-        text complexity
-        text task_type
+        string status
+        string priority
+        int project_id FK
+        timestamp created_at
     }
+    
+    agent_runs ||--o{ agent_episodes : generates
     agent_runs {
         int id PK
         int task_id FK
-        text role
-        text model
-        text result
-        real cost
+        string role
         int turns_used
-        int max_turns
-        text outcome
+        string outcome
+        float cost_estimate
+        timestamp started_at
     }
+    
+    agent_episodes ||--o{ lessons : teaches
     agent_episodes {
         int id PK
         int run_id FK
-        text role
+        string role
         text reflection
-        real q_value
-        text error_type
-        text project_name
+        text approach_summary
+        float q_value
+        text embedding JSON
     }
+    
     lessons {
         int id PK
-        text role
-        text error_type
-        text lesson_text
+        string role
+        string error_type
+        text content
         int times_injected
-        int active
+        bool is_active
     }
-    simba_rules {
-        int id PK
-        text role
-        text error_type
-        text rule_text
-        real effectiveness
-        text status
-    }
+    
+    forgesmith_changes ||--o{ tasks : impacts
     forgesmith_changes {
         int id PK
-        text run_id
-        text change_type
+        string change_type
         text rationale
-        text old_value
-        text new_value
+        bool is_active
+        timestamp created_at
     }
-    rubric_scores {
+    
+    simba_rules ||--o{ agent_runs : guides
+    simba_rules {
         int id PK
-        int run_id FK
-        text role
-        real normalized_score
-        text dimensions
+        string role
+        string error_type
+        text rule_text
+        float effectiveness
+    }
+    
+    knowledge_graph ||--o{ lessons : connects
+    knowledge_graph ||--o{ agent_episodes : connects
+    knowledge_graph {
+        string from_id PK
+        string to_id PK
+        string edge_type
+        float weight
     }
 ```
+
+**Note:** This is simplified. The real schema has 30+ tables. See `equipa/schema.sql` for the full DDL.
 
 ---
 
 ## Project Structure
 
 ```
-equipa/                     # Core package — the engine
-├── cli.py                  # Entry point. Parses args, dispatches work
-├── dispatch.py             # Scans pending tasks, scores priorities, launches agents
-├── routing.py              # Complexity scoring + model tier selection + circuit breaker
-├── agent_runner.py         # Runs a single agent: retry logic, overload handling
-├── prompts.py              # Builds system prompts with cache-splitting for cost savings
-├── lessons.py              # Retrieves lessons + SIMBA rules for prompt injection
-├── parsing.py              # Extracts reflections, test results, Q-values from agent output
-├── monitoring.py           # Loop detection, monologue detection, budget warnings
-├── bash_security.py        # 25+ checks for command injection before any bash execution
-├── security.py             # Skill manifest integrity verification
-├── tasks.py                # Task CRUD operations against SQLite
-├── db.py                   # Database connection + schema management
-├── messages.py             # Inter-agent messaging (agents can leave notes for each other)
-├── checkpoints.py          # Anti-compaction state persistence for long tasks
-├── hooks.py                # Event system for extensibility
-├── mcp_server.py           # Model Context Protocol server for Claude Desktop
-├── mcp_health.py           # Health monitoring for MCP server connections
-├── embeddings.py           # Vector embeddings via Ollama for semantic memory
-├── graph.py                # Knowledge graph: PageRank, label propagation on lessons
-├── git_ops.py              # Language detection, repo setup
-├── preflight.py            # Pre-dispatch checks (does the project even build?)
-├── output.py               # Terminal formatting for dispatch summaries
-├── tool_result_storage.py  # Large tool output persistence (avoids context overflow)
-├── abort_controller.py     # Hierarchical cancellation (parent kills children)
-
-forgesmith.py               # Self-improvement engine — analyzes runs, extracts lessons
-forgesmith_gepa.py          # GEPA: Genetic Evolution of Prompt Architecture
-forgesmith_simba.py         # SIMBA: Situational rules from failure patterns
+equipa/
+├── cli.py              # Main entry point, arg parsing, async orchestration
+├── mcp_server.py       # JSON-RPC server for Claude Desktop MCP integration
+├── dispatch.py         # Auto-dispatch logic, project scoring, parallel execution
+├── agent_runner.py     # Agent loop: API calls, tool execution, turn limits
+├── prompts.py          # Load and build agent system prompts with cache split
+├── git_ops.py          # Worktree isolation, branch management, merge handling
+├── bash_security.py    # Command injection filters (12+ regex checks)
+├── monitoring.py       # Loop detection, early termination, budget tracking
+├── checkpoints.py      # Soft checkpoint streaming for context compaction recovery
+├── db.py               # SQLite connection pooling, schema setup
+├── lessons.py          # Episodic memory retrieval, SIMBA rule injection
+├── embeddings.py       # Ollama embedding generation, cosine similarity search
+├── graph.py            # Knowledge graph PageRank, co-accessed edges, label propagation
+├── routing.py          # Cost-based model selection, circuit breaker fallback
+├── parsing.py          # Extract reflections, test results, file changes from agent output
+├── tasks.py            # Task CRUD, project context fetching
+└── schema.sql          # 30+ table DDL with indexes and views
 
 scripts/
-├── nightly_review.py       # Portfolio-level daily summary
-├── analyze_performance.py  # Deep analytics on completion rates and throughput
-├── autoresearch_loop.py    # Automated prompt optimization loop
-├── forgesmith_backfill.py  # Backfill episode data from agent logs
-├── forgesmith_impact.py    # Blast radius analysis for config changes
+├── forgesmith.py       # Nightly self-improvement: analyze episodes, evolve prompts/config
+├── forgesmith_gepa.py  # Genetic Episodic Prompt Architecture (DSPy-based prompt evolution)
+├── forgesmith_simba.py # SIMBA: Self-Improving Memory-Based Adaptation (rule generation)
+└── nightly_review.py   # Daily portfolio health report
 
-tools/
-├── forge_dashboard.py      # Terminal dashboard for task/project overview
-├── forge_arena.py          # Multi-phase convergence testing
-├── prepare_training_data.py # Export data for fine-tuning
-├── benchmark_migrations.py # DB migration testing
-
-skills/                     # Agent skill definitions
-├── security/               # SARIF parsing, static analysis helpers
-
-prompts/                    # Role-specific prompt templates (per language)
-
-tests/                      # 334+ tests, all pure pytest
-├── test_early_termination.py  # Biggest test file — loop/monologue/cost detection
-├── test_bash_security.py      # Extensive exploit coverage
-├── test_loop_detection.py     # Fingerprinting and pattern detection
-├── ...
-
-db_migrate.py               # Schema migrations v0→v5 with automatic backups
-equipa_setup.py             # Interactive setup wizard
-ollama_agent.py             # Local Ollama model support (alternative to Claude)
+tests/
+├── test_agent_runner.py          # Agent loop, retry logic, model fallback
+├── test_bash_security.py         # 80+ injection patterns blocked
+├── test_loop_detection.py        # Stuck agent detection, fingerprint hashing
+├── test_early_termination.py     # Monologue detection, cost breaker, preflight checks
+├── test_vector_memory.py         # Embedding-based episode retrieval
+├── test_knowledge_graph.py       # PageRank, similarity edges, reranking
+├── test_cost_routing.py          # Complexity scoring, circuit breaker, model tier selection
+└── test_db_migration_*.py        # Schema migration validation (v1-v7)
 ```
 
 ---
 
 ## Key Design Decisions
 
-### Why zero dependencies?
-Copy the folder, run it. No virtualenv, no pip, no version conflicts. The stdlib has `sqlite3`, `json`, `subprocess`, `http.client` — that's enough. The only external call is to Claude's API (or Ollama) via subprocess/HTTP.
+**1. Conversational interface first**  
+Most users never touch the CLI. They talk to Claude in plain English. Claude creates tasks, dispatches agents, monitors progress, and reports back. The MCP server (`equipa/mcp_server.py`) is the primary interface. The CLI exists for automation and scripting.
 
-### Why SQLite, not Postgres?
-Single file. No server to run. Backup is copying a file. The 30+ table schema sounds heavy but SQLite handles it fine for the scale this operates at — hundreds of tasks, not millions.
+**2. Zero dependencies**  
+Pure Python stdlib. No pip installs. No version conflicts. Copy the repo, run `python -m equipa`. Works on any machine with Python 3.10+. This was a hard constraint — makes deployment trivial and keeps the codebase auditable.
 
-### Why subprocess for Claude API calls?
-The agent runner shells out to `claude` CLI. This sounds weird but it means EQUIPA doesn't need an API key embedded — it piggybacks on your existing Claude CLI auth. It also means each agent run is an isolated process that can be killed cleanly.
+**3. Git worktree isolation**  
+Every agent gets its own `git worktree` so it can't corrupt your main branch. If it breaks things, the worktree gets nuked. If it succeeds, you merge the branch. This is still being refined — merge conflicts occasionally need manual intervention.
 
-### The anti-compaction trick
-Claude's context window gets compacted on long conversations, losing important state. EQUIPA stores checkpoints to disk and re-injects them, so if compaction happens the agent doesn't lose track of what it was doing. This is noted in the system prompt itself — agents are told their state persists.
+**4. Self-improvement via episodic memory**  
+ForgeSmith reads completed agent runs, spots recurring failure patterns, and evolves prompts or config settings to fix them. GEPA (Genetic Episodic Prompt Architecture) uses DSPy to evolve prompts based on success/failure examples. SIMBA (Self-Improving Memory-Based Adaptation) generates tactical rules injected into agent context. This takes 20-30 tasks before you see results — not instant magic.
 
-### Prompt cache splitting
-`PromptResult` splits system prompts into a static part (role instructions, common rules) and a dynamic part (task details, lessons). The static part stays the same across tasks for the same role, so Anthropic's prompt caching kicks in and you pay less. It's a cost optimization that adds up fast.
+**5. Anti-compaction state persistence**  
+Long tasks hit Claude's context limit and get compacted (old messages dropped). Agents save `.forge-state.json` checkpoints so they can resume from where they left off instead of starting over. Soft checkpoints stream to disk every few turns. If an agent gets killed, the replacement picks up its progress.
 
-### 9 roles, not 1 generalist
-Specialized prompts beat general ones. A developer agent gets told to write code and use tools immediately. A tester agent gets told to run existing tests first. A security reviewer looks for specific vulnerability patterns. Each role has language-specific prompt additions (Python agents know about pytest, Go agents know about `go test`, etc.).
+**6. Retry with jitter and model fallback**  
+API calls use exponential backoff (500ms base, 25% jitter, 32s cap). After 3 `overloaded_error` responses, we fall back from opus to sonnet. After 3 task failures, the task goes to "blocked" and you get a report.
 
-### Circuit breaker on model routing
-If the expensive model (Opus) starts failing repeatedly, the circuit breaker trips and tasks get routed to a cheaper model. It recovers after 60 seconds. This prevents a bad API day from burning your budget.
+**7. Bash security filter**  
+12+ regex checks block command injection, IFS manipulation, process substitution, heredocs, unicode whitespace, and more. Ported from Claude Code's production security layer. See `test_bash_security.py` for 80+ blocked patterns.
 
-### Loop detection fingerprinting
-Every agent turn gets fingerprinted — result text, blockers, errors. If the same fingerprint repeats 3+ times, warning. 5+ times, terminated. There's also alternating pattern detection (agent bouncing between two states) and monologue detection (agent talking but not using tools). This is a bit gnarly — see `equipa/monitoring.py`.
+**8. Knowledge graph with PageRank**  
+Episodes and lessons connect via co-accessed edges (used together in the same task) and similarity edges (high cosine similarity). PageRank scores nodes by centrality. Episodes that help many tasks rank higher and get injected more often. Enabled via `vector_memory: true` in dispatch config.
 
-### Bash security is paranoid
-25+ checks before any bash command executes. Command substitution, brace expansion, IFS injection, zsh-specific exploits, Unicode homoglyphs, null bytes, process substitution.. the test file has real-world exploit patterns. An agent can't accidentally `rm -rf /` or exfiltrate data through `jq`.
+**9. Cost controls that kill runaway agents**  
+Max turns (default 35), cost cap per complexity tier, early termination on monologue (3 consecutive text-only turns with no tool use), stuck phrase detection ("I apologize", "I need to think"). Loop detector kills agents that repeat the same bash command 5 times with the same error.
 
-### Self-improvement is a closed loop
-ForgeSmith → GEPA (evolve prompts genetically) → SIMBA (extract situational rules from failure patterns) → lessons get injected into future agent runs → agent performance feeds back into ForgeSmith. Episodic memory uses Q-values that update on success/failure, so good strategies float up and bad ones sink. The knowledge graph adds PageRank-based reranking so the most connected and useful lessons surface first.
+**10. Cross-platform scheduling**  
+ForgeSmith nightly runs are auto-configured during setup. Linux/WSL uses cron, Windows uses Task Scheduler. Setup wizard writes the crontab/XML and validates it runs.
 
 ---
 
 ## Current Limitations
 
-- **Agents still get stuck.** Complex tasks with ambiguous requirements can cause analysis paralysis — the agent reads and reads without writing code. Early termination kills these at 10 turns of reading, but some legitimate complex tasks genuinely need that exploration time.
+**Agents still get stuck**  
+Complex tasks with vague requirements can trigger analysis paralysis. The agent reads files, thinks out loud, reads more files, never writes code. Early termination helps but doesn't catch every case.
 
-- **Git worktree merges occasionally need manual intervention.** When agents work in parallel on separate branches, the merge back isn't always clean. This part is still being refined.
+**Git worktree merges need babysitting**  
+If your main branch changed a lot since the agent started, `git merge` can fail with conflicts. You have to resolve them manually. We could auto-rebase but that risks silently breaking things.
 
-- **Self-improvement needs data.** GEPA and SIMBA need 20-30 completed tasks before meaningful patterns emerge. Before that, the system runs on its base prompts, which are decent but not tuned to your specific projects.
+**Self-improvement needs data**  
+ForgeSmith works great after 30+ tasks. On day one with 5 completed tasks, it doesn't have enough signal to spot patterns. Be patient or seed it with synthetic episodes.
 
-- **Tester role assumes your project has tests.** If there's no test suite to run, the tester agent doesn't have much to work with. It won't write a test framework from scratch (though it will add individual test files).
+**Tester depends on tests existing**  
+If your project has no test suite, Tester role is useless. It will try to run `pytest`, `npm test`, or `go test` and report "no tests found". Developer role can write tests but often skips them unless you explicitly ask.
 
-- **Early termination is a blunt instrument.** The 10-turn reading limit catches stuck agents but also kills agents that are doing legitimate deep analysis. There's no great way to distinguish "productively exploring" from "going in circles" yet.
+**Test-driven iteration isn't seamless**  
+The dev-test loop (Developer writes code, Tester runs tests, Developer fixes failures) works but costs a lot of turns. If tests fail 3 times, the task usually gets stuck. We need better test failure context injection.
 
-- **It's not magic.** Agents still fail, get stuck, and waste turns sometimes. The system gets better over time, but expect maybe 70-80% success on well-defined tasks and lower on vague ones. The self-improvement loop helps, but slowly.
+**Early termination can kill legitimate work**  
+10 turns of reading without writing triggers early termination. Some complex tasks legitimately need that much investigation. Exempting certain roles helps but isn't perfect.
+
+**No incremental commits**  
+Agents commit everything at the end. If they fail partway through, you lose all progress. Soft checkpoints save state but don't create git commits. We should commit after every file write that passes basic syntax checks.
+
+**Vector memory depends on Ollama**  
+Embedding-based retrieval requires Ollama running locally with `nomic-embed-text` model. If Ollama is down, it falls back to keyword matching. Should support OpenAI embeddings API as an alternative.
+
+**Prompt cache split is fragile**  
+We split prompts into static (common) and dynamic (task-specific) parts to maximize Claude's prompt caching. If the boundary marker (`<!-- TASK_CONTEXT -->`) gets corrupted, caching breaks and costs spike. Should validate boundary integrity before sending.
+
+**Knowledge graph is opt-in and slow**  
+PageRank reranking helps episode retrieval but adds latency. Disabled by default. Needs better benchmarking on large datasets (1000+ episodes).
 ---
 
 ## Related Documentation

@@ -5,287 +5,352 @@
 - [EQUIPA](#equipa)
   - [What is this?](#what-is-this)
   - [Screenshots](#screenshots)
+    - [Task Board](#task-board)
+    - [Agent Logs](#agent-logs)
+    - [Performance Dashboard](#performance-dashboard)
+    - [Episodic Memory](#episodic-memory)
   - [Quick Start](#quick-start)
+- [1. Clone the repo](#1-clone-the-repo)
+- [2. Run the setup wizard](#2-run-the-setup-wizard)
+- [3. Configure Claude Desktop to use the MCP server](#3-configure-claude-desktop-to-use-the-mcp-server)
+- [The setup wizard will show you where to paste the config](#the-setup-wizard-will-show-you-where-to-paste-the-config)
+- [4. Restart Claude Desktop](#4-restart-claude-desktop)
+- [5. Talk to Claude:](#5-talk-to-claude)
+- ["Create a task to add dark mode to the dashboard"](#create-a-task-to-add-dark-mode-to-the-dashboard)
+- ["Show me what's in progress"](#show-me-whats-in-progress)
+- ["Run the tester agent on task 42"](#run-the-tester-agent-on-task-42)
   - [How to Use](#how-to-use)
-    - [The conversational workflow (this is how most people use it)](#the-conversational-workflow-this-is-how-most-people-use-it)
-    - [The CLI (for automation and scripting)](#the-cli-for-automation-and-scripting)
-- [Dispatch a specific task](#dispatch-a-specific-task)
-- [Auto-dispatch pending work across all projects](#auto-dispatch-pending-work-across-all-projects)
-- [Run the MCP server manually](#run-the-mcp-server-manually)
-- [Run multiple tasks in parallel](#run-multiple-tasks-in-parallel)
-    - [The self-improvement loop](#the-self-improvement-loop)
+    - [Conversational Mode (recommended)](#conversational-mode-recommended)
+    - [CLI Mode (for automation)](#cli-mode-for-automation)
+- [Create a task](#create-a-task)
+- [Dispatch an agent](#dispatch-an-agent)
+- [Check status](#check-status)
+- [Run parallel tasks](#run-parallel-tasks)
+    - [Agent Roles](#agent-roles)
   - [Features](#features)
-  - [Limitations](#limitations)
+  - [Current Limitations](#current-limitations)
   - [Installation](#installation)
-    - [Prerequisites](#prerequisites)
-    - [Step by step](#step-by-step)
-- [1. Clone](#1-clone)
-- [2. Run the interactive setup](#2-run-the-interactive-setup)
-- [3. Verify everything works](#3-verify-everything-works)
-- [4. Run database migrations (if upgrading from an older version)](#4-run-database-migrations-if-upgrading-from-an-older-version)
-    - [Setting up the self-improvement cron](#setting-up-the-self-improvement-cron)
-- [Run ForgeSmith nightly at 2 AM](#run-forgesmith-nightly-at-2-am)
-- [Run SIMBA weekly on Sundays](#run-simba-weekly-on-sundays)
+    - [Full Setup (from scratch)](#full-setup-from-scratch)
   - [Configuration](#configuration)
   - [Tech Stack](#tech-stack)
   - [License](#license)
   - [Related Documentation](#related-documentation)
 
-**Your AI development team, managed through conversation.**
+**Your AI development team that talks back.**
 
-Talk to Claude in plain English. Claude dispatches specialized AI agents to build, test, review, and secure your code — then reports back what happened.
+EQUIPA is a multi-agent orchestrator for AI coding tasks. You tell Claude what you want in plain English — "fix the login bug", "add dark mode", "write tests for the API". Claude dispatches specialized AI agents, monitors their work, and reports back. The agents write code, run tests, review security, and learn from their mistakes.
 
-![EQUIPA Dashboard](screenshots/dashboard.png)
+Named for the European Portuguese word for "team".
+
+![Dashboard Overview](screenshots/dashboard.png)
 
 ---
 
 ## What is this?
 
-EQUIPA is a multi-agent orchestrator for AI coding tasks. You describe what you want in conversation with Claude, and it figures out which agents to send, monitors their progress, and tells you when they're done. Named after the European Portuguese word for "team."
+EQUIPA coordinates AI agents to write and test code. You don't run commands or write prompts — you talk to Claude (via the Claude Desktop app or API), and Claude handles everything behind the scenes. It creates tasks, picks the right agents, watches them work, and tells you when they're done.
 
-It's pure Python with zero dependencies. Copy the files, point it at a SQLite database, and go.
+Think of it like hiring a dev team that works 24/7, costs pennies per task, and gets better at its job every week.
+
+**Who is this for?**
+
+- Developers who want AI to handle tedious work (tests, refactors, bug fixes)
+- Solo builders shipping side projects without a team
+- Anyone who wants to describe what they need and have code appear
+
+**What problems does it solve?**
+
+- No more context-switching between "write code" and "test code" and "fix code" — agents do the full loop
+- No more wasted Claude API calls on tasks that fail halfway through — cost controls kill runaway agents
+- No more copy-pasting error messages back to the AI — retry logic handles transient failures automatically
+- No more agents forgetting what worked last time — episodic memory injects lessons from past successes
+
+---
 
 ## Screenshots
 
-![Task Dashboard](screenshots/dashboard.png)
-*The dashboard shows all your projects, task completion rates, blocked work, and agent activity at a glance.*
+### Task Board
+![Task Board](screenshots/tasks.png)
+*The task board shows what's in progress, what's blocked, and what's done. Color-coded by priority. Click a task to see its full history.*
 
-![Dispatch Summary](screenshots/dispatch-summary.png)
-*After agents finish, you get a summary of what was done, what passed, and what needs attention.*
+### Agent Logs
+![Agent Logs](screenshots/agent-logs.png)
+*Live agent logs streaming in the terminal. Each agent reports what it's doing — reading files, running tests, committing changes. Cost per turn is tracked in real time.*
 
-![ForgeSmith Analysis](screenshots/forgesmith-report.png)
-*ForgeSmith reviews agent performance and suggests configuration changes — the self-improvement loop in action.*
+### Performance Dashboard
+![Performance Dashboard](screenshots/performance.png)
+*See which agents succeed most often, which tasks take the longest, and where your API budget is going. Generated by `forge-dashboard.py`.*
 
-![Nightly Review](screenshots/nightly-review.png)
-*The nightly review gives you a portfolio-level view: accomplishments, blockers, stale projects, upcoming reminders.*
+### Episodic Memory
+![Episodic Memory](screenshots/memory.png)
+*Every completed task becomes an episode. Agents retrieve relevant episodes before starting new work. High-value lessons get injected more often (knowledge graph with PageRank).*
 
 ---
 
 ## Quick Start
 
-1. **Clone the repo and run setup:**
-   ```bash
-   git clone https://github.com/sbknana/equipa.git
-   cd equipa
-   python equipa_setup.py
-   ```
+**Prerequisites:**
+- Python 3.10+
+- Anthropic API key (set `ANTHROPIC_API_KEY` in your shell)
+- Claude Desktop app (for conversational usage) OR API access (for CLI usage)
 
-2. **The setup wizard walks you through everything** — database creation, config generation, MCP server config, and CLAUDE.md placement.
+**Install (5 steps):**
 
-3. **Open Claude Desktop** (or any Claude interface with MCP support). EQUIPA registers as an MCP server, so Claude can see your tasks, dispatch agents, and check results.
+```bash
+# 1. Clone the repo
+git clone https://github.com/yourusername/equipa.git
+cd equipa
 
-4. **Talk to Claude:**
-   > "Create a task to add input validation to the user registration endpoint in the webapp project."
+# 2. Run the setup wizard
+python equipa_setup.py
 
-   Claude creates the task, picks the right agent role, dispatches it, and reports back.
+# 3. Configure Claude Desktop to use the MCP server
+# The setup wizard will show you where to paste the config
 
-5. **Check results:**
-   > "How did that task go? Any test failures?"
+# 4. Restart Claude Desktop
 
-   Claude pulls the agent logs, test results, and gives you a summary.
-
-That's it. You talk, Claude orchestrates, agents do the work.
-
----
-
-
----
-
-## How It Actually Works
-
-```
-You (human) ──talk to──> Claude ──dispatches──> EQUIPA Orchestrator ──spawns──> Agents
-                              <──reports back──         <──results──           (dev, test, review)
+# 5. Talk to Claude:
+# "Create a task to add dark mode to the dashboard"
+# "Show me what's in progress"
+# "Run the tester agent on task 42"
 ```
 
-**You never run the orchestrator directly.** You talk to Claude. Claude reads your TheForge database (via MCP), creates tasks, and dispatches agents. When they're done, Claude tells you what happened.
+That's it. No `pip install`, no Docker, no config files to edit manually.
 
-The only time you interact with EQUIPA directly is during initial setup (`python equipa_setup.py`). After that, everything goes through Claude.
+---
 
 ## How to Use
 
-### The conversational workflow (this is how most people use it)
+### Conversational Mode (recommended)
 
-You don't need to learn commands. Just talk to Claude:
+EQUIPA's primary interface is **conversational** — you talk to Claude in the Claude Desktop app, and Claude dispatches tasks behind the scenes.
 
-- **"What's pending in the webapp project?"** — Claude queries your task database and tells you.
-- **"Dispatch the top 3 tasks"** — Claude picks the highest-priority work, assigns agent roles, and runs them.
-- **"The login endpoint needs rate limiting. Create a task for that."** — Claude creates it with the right priority and complexity.
-- **"Run the security reviewer on task 47"** — Claude dispatches a specific agent role.
-- **"Show me today's progress"** — Claude pulls completion stats, blockers, and open questions.
+**Creating tasks:**
+> "Add a search bar to the task board"
+> "Fix the bug where the tester agent times out on large test suites"
+> "Write integration tests for the MCP server"
 
-Claude handles task creation, agent dispatch, progress monitoring, error recovery, and reporting. You stay in the conversation.
+**Checking status:**
+> "What tasks are in progress?"
+> "Show me the logs for task 23"
+> "Did the security review find anything?"
 
-### The CLI (for automation and scripting)
+**Dispatching agents:**
+> "Run the developer agent on task 15"
+> "Have the tester check if the API tests still pass"
+> "Security review the authentication code"
 
-If you need to script things or run EQUIPA from CI:
+Claude uses the MCP (Model Context Protocol) server to query the database, read agent logs, create tasks, and dispatch work. You never touch the CLI unless you want to.
+
+### CLI Mode (for automation)
+
+If you prefer scripts or want to run tasks from CI/CD:
 
 ```bash
-# Dispatch a specific task
-python -m equipa dispatch --task 42
+# Create a task
+python -m equipa.cli task create "Add rate limiting to API" --priority high
 
-# Auto-dispatch pending work across all projects
-python -m equipa dispatch --auto
+# Dispatch an agent
+python -m equipa.cli dispatch --task-id 42 --role developer
 
-# Run the MCP server manually
-python -m equipa --mcp-server
+# Check status
+python -m equipa.cli task status 42
 
-# Run multiple tasks in parallel
-python -m equipa dispatch --tasks 42,43,44
+# Run parallel tasks
+python -m equipa.cli dispatch --parallel --task-ids 10,11,12
 ```
 
-### The self-improvement loop
+### Agent Roles
 
-This is where things get interesting. EQUIPA has three systems that learn from past agent runs:
+EQUIPA has **9 specialized roles**, each with its own system prompt and tool access:
 
-- **ForgeSmith** analyzes agent performance — which tasks hit max turns, which errors repeat, which prompts underperform. It suggests (and optionally applies) config changes.
-- **GEPA** (Guided Evolution of Prompt Architecture) evolves agent prompts based on success/failure patterns. It runs A/B tests between prompt versions.
-- **SIMBA** (Situation-Informed Memory-Based Adaptation) extracts tactical rules from agent episodes. "When you see X error, try Y approach first."
+| Role | What it does |
+|------|--------------|
+| **Developer** | Writes code, refactors, fixes bugs. Reads files, writes files, runs bash commands. |
+| **Tester** | Runs tests, analyzes failures, writes new tests. Expects a working test suite. |
+| **Security Reviewer** | Audits code for vulnerabilities (SQL injection, XSS, auth bypasses). Reads-only unless fixing. |
+| **Planner** | Breaks big tasks into subtasks. No code access, just task decomposition. |
+| **Evaluator** | Reviews completed work for quality (tests pass, docs updated, no regressions). |
+| **Researcher** | Investigates blocked tasks. Reads docs, searches files, proposes solutions. |
+| **Documenter** | Writes/updates READMEs, API docs, inline comments. |
+| **Ghost (Scout)** | Verifies resolved security findings are actually fixed. Auto-dispatched nightly. |
+| **Orchestrator** | Meta-agent that coordinates other agents on complex multi-step tasks. |
 
-Run them manually or set up a cron job:
-```bash
-python forgesmith.py --full
-python forgesmith.py --report
-```
-
-These systems need data to work with. After 20-30 completed tasks, patterns start emerging and the suggestions get useful.
+Agents are **stateless** — they get a fresh context each turn, but they can resume from `.forge-state.json` checkpoints if killed mid-task.
 
 ---
 
 ## Features
 
-### Core: You Talk, Claude Works
-- **Conversational interface** — describe what you want in plain English. Claude creates tasks, dispatches agents, and reports back. You never touch the CLI directly.
-- **Multi-agent orchestration** — developer, tester, security reviewer, code reviewer, frontend designer, planner, debugger, integration tester, and more. Claude picks the right role for the job.
-- **Dev-test loop** — agents write code, run tests, fix failures, and iterate. Up to 5 cycles per task before giving up.
+- **Talk to Claude, not a CLI** — conversational task management via MCP server. No commands to memorize.
+- **Agents retry until tests pass** — developer + tester loop. Tester runs the suite, developer fixes failures, repeat.
+- **Self-improving prompts** — ForgeSmith (nightly cron job) analyzes failures, evolves agent prompts, and injects SIMBA rules (episodic micro-lessons).
+- **Episodic memory with knowledge graph** — agents retrieve relevant past successes before starting work. PageRank boosts high-value lessons.
+- **Cost controls that work** — agents are killed if they exceed budget (scales with task complexity). No $50 surprise bills.
+- **Zero dependencies** — pure Python stdlib. Copy the repo, run it. No pip, no Docker, no conda.
+- **Autoresearch loop** — failed tasks retry up to 3 times with git branch cleanup between attempts. No babysitting.
+- **Checkpoint streaming** — agents save progress every 3 turns. Killed agents pass state to replacements.
+- **Bash security filter** — 12+ regex checks block command injection, IFS manipulation, process substitution. Ported from Claude Code's production security layer.
+- **Abort controller** — WeakRef-based parent-child subprocess tree. Kill a task, all its subprocesses die too.
+- **Prompt cache optimization** — static/dynamic split. Base prompts are cached across tasks (saves 60-80% input tokens).
+- **Retry with jitter** — API calls use exponential backoff (500ms base, 25% jitter, 32s cap) with automatic model fallback (opus→sonnet) after 3 overloaded errors.
+- **Language-aware prompts** — detects Python/TypeScript/Go/Rust/C#/Java and injects language-specific best practices.
+- **Cross-platform scheduling** — ForgeSmith nightly runs on cron (Linux/WSL) or Windows Task Scheduler. Setup wizard auto-configures.
 
-### Self-Improvement (runs automatically)
-- **ForgeSmith reflexion** — after every task, agents reflect on what worked and what didn't. Lessons are stored and injected into future prompts.
-- **GEPA (Genetic Evolutionary Prompt Architecture)** — A/B tests prompt variants overnight. Winners get promoted. Losers get retired. Your agents get better while you sleep.
-- **SIMBA (vector memory)** — embeds past episodes and retrieves the most relevant ones for each new task. Uses Ollama locally — no external API needed.
-- **MemRL (q-value learning)** — tracks which reflexion episodes actually helped and adjusts injection weights over time.
-- **Nightly scheduled job** — ForgeSmith runs on cron (Linux/WSL) or Windows Task Scheduler. Setup wizard configures it automatically for your OS.
+---
 
-### Reliability & Recovery
-- **Autoresearch loop** — when a task fails (blocked, early-terminated, rate-limited), the orchestrator automatically cleans up, resets, and retries with a fresh agent. Up to 3 retries per task with git branch cleanup between attempts.
-- **Compaction protection** — agents maintain `.forge-state.json` with current progress. If context compaction hits mid-task, the agent resumes from where it left off instead of starting over.
-- **Soft checkpoints** — streaming monitor saves periodic checkpoints during long agent runs. If an agent is killed, the next attempt gets the checkpoint context.
-- **Retry with jitter** — API calls use exponential backoff (500ms base, 25% jitter, 32s cap) with automatic model fallback after 3 consecutive overloaded errors.
-- **Tool result persistence** — large agent outputs (>50KB) are saved to disk instead of stuffing the context window. Prevents compaction thrashing.
+## Current Limitations
 
-### Security
-- **Bash security filter** — 12+ regex-based security checks ported from Claude Code's production system. Blocks command injection, IFS manipulation, process substitution, and more.
-- **Lesson sanitizer** — agent-generated lessons are sanitized before storage to prevent prompt injection via the learning loop.
-- **Skill integrity verification** — SHA-256 manifest of all prompt/skill files. Detects tampering before agent dispatch.
-- **Randomized untrusted content delimiters** — task descriptions wrapped in unpredictable boundaries to prevent injection from task content.
+**Be realistic:**
 
-### Architecture
-- **Pure Python, zero dependencies** — stdlib only. No pip install, no requirements.txt, no virtual environments. Copy the files and go.
-- **Cost-based model routing** — simple tasks go to Sonnet (cheaper, faster), complex tasks go to Opus (smarter). Configurable per-role.
-- **Abort controller hierarchy** — parent-child subprocess management with WeakRef-based cleanup. No orphaned processes.
-- **Prompt cache optimization** — static prompt sections cached across tasks; only dynamic context (task description, lessons, episodes) changes per dispatch.
-- **Knowledge graph** — PageRank-based episode importance scoring. Lessons that help many tasks bubble up.
-
-
-## Limitations
-
-Being honest here:
-
-- **Agents still get stuck on complex tasks.** Analysis paralysis is real — sometimes an agent will spend 8 turns reading files and never write a line of code. The "bias for action" prompts help, but don't eliminate it.
-- **Git worktree merges occasionally need manual intervention.** When agents work in isolated worktrees, the merge back to main doesn't always go cleanly. You might need to resolve conflicts yourself.
-- **Self-improvement needs 20-30 tasks before patterns emerge.** ForgeSmith, GEPA, and SIMBA are great once they have data. On a fresh install, they don't do much.
-- **The tester role depends on your project having a working test suite.** If your tests are broken or don't exist, the dev-test loop can't help.
-- **Early termination kills agents at 10 turns of pure reading.** This is intentional — it prevents wasted money on stuck agents. But some legitimately complex tasks need more exploration time, and they get killed too early.
-- **Ollama integration is optional and a bit fiddly.** Vector memory and local model routing require a running Ollama instance. Setup isn't hard, but it's another moving part.
-- **The dashboard is a CLI script, not a web UI.** It prints a text report. Works fine, but don't expect charts.
-- **Not magic.** Agents still fail, get confused, waste turns, and produce mediocre code sometimes. EQUIPA makes them *better* over time, but it doesn't make them perfect.
+- **Agents get stuck sometimes.** The developer agent might read the same file 6 times in a row without making progress. Loop detection kills it at 6 identical turns, but that wastes turns and budget.
+- **Git worktree merges need manual help occasionally.** Autoresearch runs tasks in isolated git worktrees, but merge conflicts still happen. You'll need to resolve them by hand.
+- **Self-improvement takes time.** ForgeSmith needs 20-30 completed tasks before patterns emerge. Early runs might not improve much.
+- **Tester role assumes a working test suite.** If your project has no tests, the tester will fail immediately. Write at least a smoke test first.
+- **Early termination is aggressive.** Agents are killed at 10 turns of reading without tool use. Some legitimate complex tasks (like "refactor the entire auth system") need more turns. You can bump `max_turns` in `dispatch_config.yaml`, but that risks runaway costs.
+- **Context compaction still loses state.** `.forge-state.json` helps agents resume, but if they get compacted mid-task, they might forget what they were doing. Large tool outputs (>50KB) are persisted to disk to reduce compaction, but it's not foolproof.
+- **MCP server is single-threaded.** If you dispatch 10 tasks in parallel via CLI, Claude can't query their status until they finish. Use `--parallel` mode or batch queries.
+- **Knowledge graph requires vector memory.** The PageRank boosting only works if you have Ollama running locally for embeddings. Without it, lesson retrieval falls back to keyword matching (still works, just less smart).
 
 ---
 
 ## Installation
 
-### Prerequisites
+### Full Setup (from scratch)
 
-- **Python 3.10+** (no packages to install — it's all stdlib)
-- **Claude CLI** or **Claude Desktop** with MCP support
-- **Git** (for worktree isolation and agent operations)
-- **SQLite3** (comes with Python)
-- **Ollama** (optional — for vector memory and local model routing)
+**Step 1: Prerequisites**
 
-### Step by step
+- Python 3.10 or later (`python --version`)
+- Git (`git --version`)
+- Anthropic API key (get one at [console.anthropic.com](https://console.anthropic.com))
+- Claude Desktop app (download at [claude.ai/download](https://claude.ai/download))
+
+**Step 2: Clone and run setup wizard**
 
 ```bash
-# 1. Clone
-git clone https://github.com/sbknana/equipa.git
+git clone https://github.com/yourusername/equipa.git
 cd equipa
-
-# 2. Run the interactive setup
 python equipa_setup.py
 ```
 
-The setup wizard handles:
-- Creating the SQLite database with the full schema (30+ tables)
-- Generating `dispatch_config.json` with sensible defaults
-- Creating the MCP server config for Claude Desktop
-- Generating a `.mcp.json` for project-level MCP registration
-- Creating `CLAUDE.md` so Claude understands your project
+The wizard will:
+- Check for Python/Git/SQLite
+- Create the database (30+ tables, views, indexes)
+- Copy source files to `~/.equipa/` (Linux/macOS) or `%APPDATA%\equipa\` (Windows)
+- Generate `dispatch_config.yaml` with sane defaults
+- Generate MCP server config for Claude Desktop
+- Optionally configure ForgeSmith nightly cron job
 
-```bash
-# 3. Verify everything works
-python -m equipa --help
+**Step 3: Set up Claude Desktop**
 
-# 4. Run database migrations (if upgrading from an older version)
-python db_migrate.py
+The wizard will print instructions like:
+
+```
+Add this to ~/.config/claude/config.json (Linux/macOS)
+or %APPDATA%\Claude\config.json (Windows):
+
+{
+  "mcpServers": {
+    "equipa": {
+      "command": "python",
+      "args": ["-m", "equipa.mcp_server"],
+      "env": {
+        "EQUIPA_DB": "/home/you/.equipa/forge.db"
+      }
+    }
+  }
+}
 ```
 
-### Setting up the self-improvement cron
+Paste that into your Claude Desktop config, then restart the app.
 
-```bash
-# Run ForgeSmith nightly at 2 AM
-0 2 * * * cd /path/to/equipa && python forgesmith.py --full >> /var/log/forgesmith.log 2>&1
+**Step 4: Test it**
 
-# Run SIMBA weekly on Sundays
-0 3 * * 0 cd /path/to/equipa && python forgesmith_simba.py >> /var/log/simba.log 2>&1
-```
+Open Claude Desktop and say:
+
+> "Create a task to write a hello world script"
+
+Claude should respond with "Task created: #47" (or similar). Then:
+
+> "Dispatch the developer agent to task 47"
+
+Claude will monitor the agent logs and report back when it's done.
 
 ---
 
 ## Configuration
 
-The main config file is `dispatch_config.json`. Key settings:
+**Location:**
+- Linux/macOS: `~/.equipa/dispatch_config.yaml`
+- Windows: `%APPDATA%\equipa\dispatch_config.yaml`
 
-| Setting | What it does |
-|---------|-------------|
-| `max_turns` | How many conversation turns an agent gets before being stopped. Default: 25. |
-| `cost_limit` | Maximum spend per task in USD. Scales with task complexity. |
-| `auto_routing` | When `true`, picks the cheapest model that can handle the task complexity. |
-| `model_overrides` | Pin specific roles to specific models. e.g., always use Opus for security reviews. |
-| `features.vector_memory` | Enable semantic search over past episodes (requires Ollama). |
-| `features.knowledge_graph` | Enable graph-based lesson ranking with PageRank. |
-| `features.prompt_cache_split` | Split system prompts for better cache hit rates. |
+**Key settings:**
 
-Feature flags live under a `features` key and default to sensible values. You only need to touch them if you want to turn something on or off.
+```yaml
+max_turns: 30              # Kill agents after 30 turns (prevents runaway costs)
+checkpoint_interval: 3     # Save state every 3 turns
+retry_attempts: 3          # Autoresearch retries failed tasks 3 times
+
+cost_limits:
+  low_complexity: 2.00     # $2 cap for simple tasks
+  medium_complexity: 5.00  # $5 cap for medium tasks
+  high_complexity: 15.00   # $15 cap for complex tasks
+
+auto_model_routing:
+  enabled: true            # Let EQUIPA pick opus/sonnet/haiku based on task complexity
+  circuit_breaker: true    # Auto-downgrade if opus is overloaded
+
+features:
+  knowledge_graph: true    # PageRank boosting for episodic memory
+  vector_memory: true      # Ollama embeddings for similarity search
+  ghost_verification: true # Nightly security finding verification
+  autoresearch: true       # Auto-retry failed tasks up to 3 times
+```
+
+**Environment variables:**
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."   # Required
+export EQUIPA_DB="~/.equipa/forge.db"   # Optional (defaults to this)
+export OLLAMA_BASE_URL="http://localhost:11434"  # Optional (for vector memory)
+```
 
 ---
 
 ## Tech Stack
 
-For folks who want to contribute or understand the internals:
+**Language:** Python 3.10+ (pure stdlib, zero pip dependencies)
 
-- **Python 3.10+** — pure stdlib, no external packages
-- **SQLite** — all state lives in one database file (30+ tables, versioned migrations)
-- **MCP (Model Context Protocol)** — how Claude talks to EQUIPA
-- **Claude API** — via CLI subprocess calls (no SDK dependency)
-- **Ollama** (optional) — local embeddings for vector memory
-- **Git worktrees** — agent isolation so parallel work doesn't collide
+**Database:** SQLite 3.31+ (30+ tables, episodic memory, knowledge graph edges)
 
-The codebase is about 21 modules in `equipa/`, plus ForgeSmith and friends as standalone scripts. 334+ tests passing.
+**AI Providers:**
+- Anthropic Claude (opus-4, sonnet-4, haiku-4) — primary
+- Ollama (local, optional) — embeddings for vector memory
+
+**Protocols:** MCP (Model Context Protocol) for Claude Desktop integration
+
+**Key Libraries (stdlib only):**
+- `sqlite3` — database
+- `subprocess` — agent execution
+- `json` — serialization
+- `http.server` — MCP server
+- `weakref` — abort controller
+- `re` — bash security filter
+- `hashlib` — skill integrity checks
+
+**Testing:** pytest (680+ tests, 95%+ coverage)
 
 ---
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+MIT License — see [LICENSE](LICENSE) for details.
+
+---
+
+**Questions?** Open an issue or talk to Claude:
+
+> "Show me the EQUIPA docs"
 ---
 
 ## Related Documentation
