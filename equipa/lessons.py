@@ -52,20 +52,11 @@ def format_lessons_for_injection(
 
     # Late imports for sanitizer (may not be available)
     from equipa.security import wrap_untrusted
-    try:
-        from lesson_sanitizer import (
-            sanitize_error_signature,
-            sanitize_lesson_content,
-            wrap_lessons_in_task_input,
-        )
-    except ImportError:
-        # Fallback stubs — no sanitization if module unavailable
-        def sanitize_lesson_content(text):
-            return text or ""
-        def sanitize_error_signature(sig):
-            return sig or ""
-        def wrap_lessons_in_task_input(text):
-            return text or ""
+    from lesson_sanitizer import (  # HARD dependency — no silent fallback
+        sanitize_error_signature,
+        sanitize_lesson_content,
+        wrap_lessons_in_task_input,
+    )
 
     lines = []
     for lesson in lessons:

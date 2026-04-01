@@ -254,14 +254,7 @@ def _create_security_lessons(findings: list[tuple[str, str]], project_id: int | 
     Sanitizes finding descriptions before storage (PM-33) since they originate
     from agent output which could contain prompt-injection payloads.
     """
-    try:
-        from lesson_sanitizer import sanitize_lesson_content, validate_lesson_structure
-    except ImportError:
-        def sanitize_lesson_content(text):
-            return text or ""
-        def validate_lesson_structure(text):
-            return bool(text)
-
+    from lesson_sanitizer import sanitize_lesson_content, validate_lesson_structure  # HARD dependency
     conn = get_db_connection(write=True)
     created = 0
 

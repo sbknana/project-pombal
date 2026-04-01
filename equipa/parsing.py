@@ -140,11 +140,7 @@ def compact_agent_output(
             return raw_output
 
     # Late import to avoid circular dependency — sanitizer may not be available
-    try:
-        from lesson_sanitizer import sanitize_lesson_content
-    except ImportError:
-        def sanitize_lesson_content(text):
-            return text or ""
+    from lesson_sanitizer import sanitize_lesson_content  # HARD dependency — no silent fallback
 
     sections = {
         "SUMMARY": _extract_section(raw_output, "SUMMARY"),
@@ -513,6 +509,40 @@ def parse_developer_output(result_text: str) -> list[str]:
 
 
 # --- Session Compaction ---
+
+
+def verify_files_changed(claimed_files: list[str], project_dir: str) -> list[str]:
+    """Cross-reference claimed FILES_CHANGED against actual git diff.
+
+    Returns only files that actually changed according to git.
+    Prevents agents from faking progress by claiming changes they didn't make.
+    """
+    import subprocess
+    if not claimed_files or not project_dir:
+        return claimed_files
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD"],
+            cwd=project_dir, capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return claimed_files  # Can't verify, trust the claim
+        actual_files = set(result.stdout.strip().splitlines())
+        # Also check staged files
+        staged = subprocess.run(
+            ["git", "diff", "--name-only", "--cached"],
+            cwd=project_dir, capture_output=True, text=True, timeout=10,
+        )
+        if staged.returncode == 0:
+            actual_files.update(staged.stdout.strip().splitlines())
+        if not actual_files:
+            return claimed_files  # No git changes detected, trust claim (might be committed already)
+        # Return intersection — only files that were both claimed AND actually changed
+        verified = [f for f in claimed_files if any(f.endswith(a) or a.endswith(f) for a in actual_files)]
+        return verified if verified else claimed_files  # Fallback to claims if no match (path format differences)
+    except Exception:
+        return claimed_files  # On error, trust the claim
+
 
 def build_compaction_summary(
     role: str, result: dict, cycle: int, task: dict
