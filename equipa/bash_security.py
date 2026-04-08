@@ -471,17 +471,35 @@ def _check_command_substitution(unquoted: str) -> BashSecurityResult:
 
 
 def _check_redirections(unquoted: str) -> BashSecurityResult:
-    """Checks 9-10: Input and output redirection in unquoted content."""
+    """Checks 9-10: Input and output redirection in unquoted content.
+
+    Allows normal file redirections that developers need (creating files,
+    saving output, /dev/null) but blocks redirects to sensitive system paths.
+    """
+    _DANGEROUS_TARGETS = (
+        "/etc/", "/usr/", "/bin/", "/sbin/", "/var/log/",
+        "/root/", "~/.ssh/", "~/.bashrc", "~/.profile",
+        "/dev/sd", "/proc/", "/sys/",
+    )
+
     if "<" in unquoted:
-        return BashSecurityResult(
-            safe=False, check_id=CheckID.INPUT_REDIRECTION,
-            message="Command contains input redirection (<) which could read sensitive files",
-        )
+        for target in ("/etc/shadow", "/etc/passwd", "/proc/", "~/.ssh/"):
+            if target in unquoted:
+                return BashSecurityResult(
+                    safe=False, check_id=CheckID.INPUT_REDIRECTION,
+                    message=f"Command reads from sensitive path: {target}",
+                )
+        return _SAFE
+
     if ">" in unquoted:
-        return BashSecurityResult(
-            safe=False, check_id=CheckID.OUTPUT_REDIRECTION,
-            message="Command contains output redirection (>) which could write to arbitrary files",
-        )
+        for target in _DANGEROUS_TARGETS:
+            if target in unquoted:
+                return BashSecurityResult(
+                    safe=False, check_id=CheckID.OUTPUT_REDIRECTION,
+                    message=f"Command writes to sensitive system path: {target}",
+                )
+        return _SAFE
+
     return _SAFE
 
 
