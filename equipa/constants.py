@@ -97,19 +97,19 @@ DEFAULT_ROLE_MODELS = {
 }
 
 # Dev+Tester loop constants
-MAX_DEV_TEST_CYCLES = 5
+MAX_DEV_TEST_CYCLES = 10
 DEV_COMPACTION_THRESHOLD = 10    # turns before compacting developer
 TESTER_COMPACTION_THRESHOLD = 6  # turns before compacting tester
 NO_PROGRESS_LIMIT = 2            # consecutive no-change runs before blocking
-MAX_CONTINUATIONS = 3            # auto-retries when developer runs out of turns/timeout
+MAX_CONTINUATIONS = 8            # auto-retries when developer runs out of turns/timeout
 
 # --- Early Termination ---
 
 # Detect stuck agents mid-run and kill before wasting turns
 # Escalating warnings: first warning -> final warning -> kill
-EARLY_TERM_WARN_TURNS = 5        # turns with no Edit/Write before first warning
-EARLY_TERM_FINAL_WARN_TURNS = 8  # turns with no Edit/Write before final warning
-EARLY_TERM_KILL_TURNS = 10        # turns with no Edit/Write before killing agent
+EARLY_TERM_WARN_TURNS = 12        # turns with no Edit/Write before first warning
+EARLY_TERM_FINAL_WARN_TURNS = 20  # turns with no Edit/Write before final warning
+EARLY_TERM_KILL_TURNS = 25        # turns with no Edit/Write before killing agent
 EARLY_TERM_STUCK_PHRASES = [
     "i am unable to",
     "i cannot",
