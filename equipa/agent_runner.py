@@ -656,7 +656,7 @@ async def _run_agent_streaming_impl(
                             bash_cmd = tool_input.get("command", "")
 
                             # --- Bash security pre-execution filter ---
-                            sec_result = check_bash_command(bash_cmd)
+                            sec_result = check_bash_command(bash_cmd, trusted_agent=True)
                             if not sec_result.safe:
                                 log(f"  [BashSecurity] BLOCKED check={sec_result.check_id}: "
                                     f"{sec_result.message} — cmd={bash_cmd[:120]}", output)

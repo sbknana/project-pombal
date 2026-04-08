@@ -941,11 +941,32 @@ def _check_comment_quote_desync(command: str) -> BashSecurityResult:
 # Public API
 # ---------------------------------------------------------------------------
 
-def check_bash_command(command: str) -> BashSecurityResult:
+# Checks that are too strict for trusted agent commands (heredocs, multi-line
+# scripts, comments with quotes).  These block normal development patterns
+# like ``python3 << 'EOF'`` and ``git commit -m "$(cat <<'EOF' ... EOF)"``.
+# They remain active for untrusted / user-facing input.
+AGENT_SAFE_SKIP: frozenset[int] = frozenset({
+    7,   # newlines (agents write multi-line heredocs)
+    19,  # git commit substitution (agents use heredoc commit messages)
+    22,  # comment quote desync (agents write Python with # comments)
+    23,  # quoted newline in comment (same reason)
+})
+
+
+def check_bash_command(
+    command: str,
+    *,
+    trusted_agent: bool = False,
+) -> BashSecurityResult:
     """Run all bash security checks on *command*.
 
     Returns a ``BashSecurityResult``. If ``result.safe`` is False the
     command MUST be rejected — do NOT pass it to subprocess.
+
+    When *trusted_agent* is True, checks in ``AGENT_SAFE_SKIP`` are
+    skipped.  This is used for EQUIPA agent commands running in isolated
+    git worktrees, where heredocs / multi-line scripts / comments are
+    normal development patterns, not attack vectors.
 
     The checks are ordered from cheapest to most expensive for early-out
     performance.
@@ -955,6 +976,8 @@ def check_bash_command(command: str) -> BashSecurityResult:
 
     base_cmd = _get_base_command(command)
     unquoted = _extract_unquoted(command)
+
+    skip = AGENT_SAFE_SKIP if trusted_agent else frozenset()
 
     # Run each check in priority order. First failure wins.
     checks: list[BashSecurityResult] = [
@@ -983,6 +1006,8 @@ def check_bash_command(command: str) -> BashSecurityResult:
 
     for result in checks:
         if not result.safe:
+            if result.check_id in skip:
+                continue
             log.warning(
                 "Bash security check %d BLOCKED command: %s — %s",
                 result.check_id, command[:120], result.message,
