@@ -65,7 +65,44 @@ ANY of these → immediately output `RESULT: blocked` and STOP:
 
 ---
 
-## WORKFLOW (3 STEPS, 3 TOOL CALLS MAX)
+## WHEN SPECIFIC TESTS ARE PROVIDED (BENCHMARK MODE)
+
+If your context contains a **TEST_VALIDATION** section with FAIL_TO_PASS test names, **use those directly — skip stack detection entirely:**
+
+### STEP 1 — INSTALL & RUN PROVIDED TESTS (1-2 bash calls)
+
+```bash
+# Install the project (if needed)
+cd <project_root> && pip install -e . 2>&1 | tail -3
+
+# Run the FAIL_TO_PASS tests directly
+cd <project_root> && python -m pytest <test_file>::<test_name> -v 2>&1
+
+# Run a sample of PASS_TO_PASS (up to 5) for regression check
+cd <project_root> && python -m pytest <p2p_test_1> <p2p_test_2> -v 2>&1
+```
+
+### STEP 2 — OUTPUT RESULT (0 tool calls)
+
+- All FAIL_TO_PASS tests pass + PASS_TO_PASS sample passes → `RESULT: pass`
+- Any FAIL_TO_PASS test still failing → `RESULT: fail` (list which ones in FAILURE_DETAILS)
+- Cannot install/run → `RESULT: blocked`
+
+---
+
+## WHEN DEVELOPER CHANGES ARE PROVIDED (ALL TASKS)
+
+If your context contains a **Developer Changes (git diff)** section:
+
+- **Use it to scope your testing.** Don't run the full test suite.
+- Changed `src/foo/bar.py` → look for `tests/test_bar.py` or `tests/foo/test_bar.py`
+- Changed `src/components/Button.tsx` → look for `__tests__/Button.test.tsx`
+- Run ONLY tests matching changed files.
+- If no matching test files exist → `RESULT: no-tests`
+
+---
+
+## DEFAULT WORKFLOW (3 STEPS, 3 TOOL CALLS MAX)
 
 ### STEP 1 — DETECT STACK (1-2 tool calls)
 

@@ -83,10 +83,39 @@ def create_theforge_task(project_id: int, instance: dict, repo_dir: str) -> int:
     iid = instance["instance_id"]
     problem = instance["problem_statement"]
 
+    # Extract test validation info
+    fail_to_pass = instance.get("FAIL_TO_PASS", [])
+    pass_to_pass = instance.get("PASS_TO_PASS", [])
+
+    if isinstance(fail_to_pass, str):
+        try:
+            fail_to_pass = json.loads(fail_to_pass)
+        except (json.JSONDecodeError, TypeError):
+            fail_to_pass = []
+    if isinstance(pass_to_pass, str):
+        try:
+            pass_to_pass = json.loads(pass_to_pass)
+        except (json.JSONDecodeError, TypeError):
+            pass_to_pass = []
+
+    test_info = ""
+    if fail_to_pass:
+        test_info += "\n\nTEST_VALIDATION:\n"
+        test_info += "FAIL_TO_PASS (these tests MUST pass after your fix):\n"
+        for t in fail_to_pass:
+            test_info += f"  - {t}\n"
+        if pass_to_pass:
+            test_info += "PASS_TO_PASS (must continue passing):\n"
+            for t in pass_to_pass[:20]:
+                test_info += f"  - {t}\n"
+            if len(pass_to_pass) > 20:
+                test_info += f"  ... and {len(pass_to_pass) - 20} more\n"
+
     description = (
         f"SWE-bench Verified task: {iid}\n\n"
         f"Fix this GitHub issue in the repository at {repo_dir}.\n\n"
         f"ISSUE:\n{problem}\n\n"
+        f"{test_info}\n"
         f"Instructions: Read the issue carefully, understand the root cause, "
         f"find the relevant code, implement a correct fix, and ensure existing "
         f"tests still pass. Write new tests if appropriate. "
@@ -151,7 +180,7 @@ def update_project_path(project_id: int, repo_dir: str):
     conn.close()
 
 
-def run_equipa_task(task_id: int, repo_dir: Path, project_id: int, timeout: int = 600) -> dict:
+def run_equipa_task(task_id: int, repo_dir: Path, project_id: int, timeout: int = 600, base_commit: str = "") -> dict:
     """Dispatch a task through the REAL EQUIPA orchestrator."""
     # Point the project at this task's repo
     update_project_path(project_id, str(repo_dir))
@@ -196,9 +225,9 @@ def run_equipa_task(task_id: int, repo_dir: Path, project_id: int, timeout: int 
             patch = diff_result.stdout
 
         # 2. Check committed changes vs original base commit
-        if not patch:
+        if not patch and base_commit:
             diff_result = subprocess.run(
-                ["git", "diff", instance["base_commit"] + "..HEAD"],
+                ["git", "diff", base_commit + "..HEAD"],
                 cwd=str(repo_dir), capture_output=True, text=True, timeout=10,
             )
             if diff_result.stdout.strip():
@@ -366,7 +395,11 @@ def run_benchmark(
             print(f"  [TheForge] Task #{task_id} created")
 
             # Run through EQUIPA orchestrator
-            run_result = run_equipa_task(task_id, repo_dir, project_id, timeout=timeout_per_task)
+            run_result = run_equipa_task(
+                task_id, repo_dir, project_id,
+                timeout=timeout_per_task,
+                base_commit=instance["base_commit"],
+            )
 
             # Check results
             has_patch = check_patch(run_result["patch"])

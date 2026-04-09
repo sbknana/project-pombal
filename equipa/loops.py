@@ -718,8 +718,51 @@ async def run_dev_test_loop(
         log(f"\n  [Cycle {cycle}] Running Tester agent "
             f"(budget: {tester_turns_allocated}/{tester_turns_max})...", output)
 
+        # Build tester extra_context: git diff + test validation info
+        tester_extra_context = ""
+
+        # A. Git diff — what the developer changed (always, all tasks)
+        try:
+            import subprocess as _sp
+            diff_stat = _sp.run(
+                ["git", "diff", "HEAD~1", "--stat", "--no-color"],
+                cwd=project_dir, capture_output=True, text=True, timeout=10,
+            )
+            if diff_stat.returncode == 0 and diff_stat.stdout.strip():
+                tester_extra_context += (
+                    "## Developer Changes (git diff)\n\n"
+                    f"**Files changed:**\n```\n{diff_stat.stdout.strip()}\n```\n\n"
+                )
+                # Include actual diff content (capped)
+                diff_full = _sp.run(
+                    ["git", "diff", "HEAD~1", "--no-color"],
+                    cwd=project_dir, capture_output=True, text=True, timeout=10,
+                )
+                if diff_full.returncode == 0 and diff_full.stdout.strip():
+                    diff_text = diff_full.stdout[:3000]
+                    if len(diff_full.stdout) > 3000:
+                        diff_text += "\n... (diff truncated)"
+                    tester_extra_context += f"**Diff:**\n```diff\n{diff_text}\n```\n\n"
+                tester_extra_context += (
+                    "Use this to scope your testing — run tests matching "
+                    "the changed files, not the full test suite.\n\n"
+                )
+        except Exception:
+            pass  # Non-git or no commits — skip silently
+
+        # B. Test validation info from task description (benchmarks)
+        task_desc = task.get("description", "")
+        if "TEST_VALIDATION:" in task_desc:
+            tv_start = task_desc.index("TEST_VALIDATION:")
+            tv_block = task_desc[tv_start:]
+            tv_end = tv_block.find("\n\nInstructions:")
+            if tv_end > 0:
+                tv_block = tv_block[:tv_end]
+            tester_extra_context += f"## {tv_block}\n"
+
         tester_prompt = build_system_prompt(
             task, project_context, project_dir, role="tester",
+            extra_context=tester_extra_context,
             dispatch_config=dispatch_config,
             max_turns=tester_turns_allocated,
         )
@@ -806,7 +849,10 @@ async def run_dev_test_loop(
             })
             post_agent_message(task_id, cycle, "tester", task_role,
                                "test_passed", msg_content)
-            log(f"  [Cycle {cycle}] Posted test_passed message for {task_role}", output)
+            if cycle == 1:
+                log(f"  [Cycle {cycle}] Tests passed on FIRST cycle — fast exit!", output)
+            else:
+                log(f"  [Cycle {cycle}] All tests passed!", output)
             clear_checkpoints(task_id)
             _apply_cost_totals(tester_result, total_cost, total_duration)
             return tester_result, cycle, "tests_passed"

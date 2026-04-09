@@ -102,10 +102,42 @@ def update_project_path(project_id, repo_dir):
 def create_task(project_id, instance, repo_dir, attempt=1):
     iid = instance["instance_id"]
     problem = instance["problem_statement"]
+
+    # Extract test validation info from the dataset
+    fail_to_pass = instance.get("FAIL_TO_PASS", [])
+    pass_to_pass = instance.get("PASS_TO_PASS", [])
+
+    # Parse JSON-encoded lists if needed (SWE-bench format)
+    if isinstance(fail_to_pass, str):
+        try:
+            fail_to_pass = json.loads(fail_to_pass)
+        except (json.JSONDecodeError, TypeError):
+            fail_to_pass = []
+    if isinstance(pass_to_pass, str):
+        try:
+            pass_to_pass = json.loads(pass_to_pass)
+        except (json.JSONDecodeError, TypeError):
+            pass_to_pass = []
+
+    # Build test validation block
+    test_info = ""
+    if fail_to_pass:
+        test_info += "\n\nTEST_VALIDATION:\n"
+        test_info += "FAIL_TO_PASS (these tests MUST pass after your implementation):\n"
+        for t in fail_to_pass:
+            test_info += f"  - {t}\n"
+        if pass_to_pass:
+            test_info += "PASS_TO_PASS (must continue passing — run a sample):\n"
+            for t in pass_to_pass[:20]:
+                test_info += f"  - {t}\n"
+            if len(pass_to_pass) > 20:
+                test_info += f"  ... and {len(pass_to_pass) - 20} more\n"
+
     desc = (
         f"FeatureBench task: {iid} (attempt {attempt})\n\n"
         f"Implement this feature in the repository at {repo_dir}.\n\n"
         f"FEATURE REQUEST:\n{problem}\n\n"
+        f"{test_info}\n"
         f"Instructions: Read the feature request carefully. Understand what "
         f"needs to be built. Implement the feature with clean, working code. "
         f"Add tests for the new functionality. Make sure existing tests still pass. "
