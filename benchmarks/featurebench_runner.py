@@ -168,9 +168,11 @@ def run_equipa(task_id, repo_dir, project_id, base_commit="", timeout=900):
         )
         duration = time.time() - start
 
-        # Check for patch
+        # Check for patch — FETCH_HEAD is the original base state
+        # git diff FETCH_HEAD captures ALL changes (committed + uncommitted)
         patch = ""
         for cmd in [
+            ["git", "diff", "FETCH_HEAD"],
             ["git", "diff", "HEAD"],
             ["git", "diff", f"{base_commit}..HEAD"],
         ]:
