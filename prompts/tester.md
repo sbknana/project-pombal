@@ -69,7 +69,7 @@ ANY of these → immediately output `RESULT: blocked` and STOP:
 
 If your context contains a **TEST_VALIDATION** section with FAIL_TO_PASS test names, **use those directly — skip stack detection entirely:**
 
-### STEP 1 — INSTALL & RUN PROVIDED TESTS (1-2 bash calls)
+### STEP 1 — INSTALL & RUN PROVIDED TESTS (1-3 bash calls)
 
 ```bash
 # Install the project (if needed)
@@ -78,15 +78,20 @@ cd <project_root> && pip install -e . 2>&1 | tail -3
 # Run the FAIL_TO_PASS tests directly
 cd <project_root> && python -m pytest <test_file>::<test_name> -v 2>&1
 
-# Run a sample of PASS_TO_PASS (up to 5) for regression check
-cd <project_root> && python -m pytest <p2p_test_1> <p2p_test_2> -v 2>&1
+# CRITICAL: Run ALL PASS_TO_PASS tests for regression check — not just a sample!
+# Regressions are the #1 cause of false positives. A fix that breaks other tests
+# is NOT a fix. Run the FULL list, not a sample.
+cd <project_root> && python -m pytest <all_p2p_tests> -v 2>&1
 ```
 
 ### STEP 2 — OUTPUT RESULT (0 tool calls)
 
-- All FAIL_TO_PASS tests pass + PASS_TO_PASS sample passes → `RESULT: pass`
+- All FAIL_TO_PASS tests pass + ALL PASS_TO_PASS tests pass → `RESULT: pass`
+- All FAIL_TO_PASS pass but PASS_TO_PASS has failures → `RESULT: fail` (REGRESSIONS — list which PASS_TO_PASS tests broke)
 - Any FAIL_TO_PASS test still failing → `RESULT: fail` (list which ones in FAILURE_DETAILS)
 - Cannot install/run → `RESULT: blocked`
+
+**IMPORTANT: A PASS_TO_PASS regression is a FAILURE. Do not report `pass` if any PASS_TO_PASS test broke. The developer must fix regressions before the task is done.**
 
 ---
 
@@ -94,11 +99,12 @@ cd <project_root> && python -m pytest <p2p_test_1> <p2p_test_2> -v 2>&1
 
 If your context contains a **Developer Changes (git diff)** section:
 
-- **Use it to scope your testing.** Don't run the full test suite.
-- Changed `src/foo/bar.py` → look for `tests/test_bar.py` or `tests/foo/test_bar.py`
-- Changed `src/components/Button.tsx` → look for `__tests__/Button.test.tsx`
-- Run ONLY tests matching changed files.
+- **Start with tests matching changed files**, then run the broader test suite.
+- Changed `src/foo/bar.py` → run `tests/test_bar.py` first, then the full suite.
+- Changed `src/components/Button.tsx` → run `__tests__/Button.test.tsx` first, then full suite.
+- **ALWAYS run the full test suite** (or at minimum the test module containing the changed tests). A fix that passes its own tests but breaks others is NOT a fix.
 - If no matching test files exist → `RESULT: no-tests`
+- If targeted tests pass but full suite has regressions → `RESULT: fail` (list regressions)
 
 ---
 
