@@ -172,6 +172,40 @@ def sanitize_session_note(text):
                                    label="session note")
 
 
+def sanitize_decision(text):
+    """Sanitize a decision's short fields (topic / rationale / alternatives).
+
+    Uses MAX_DECISION_LENGTH, which is sized for exactly these fields — the
+    constant's own comment reads "decision rationales". Measured against a
+    636-row decisions table the longest rationale was 4,355 chars and the
+    longest alternatives_considered 1,062, so the 8,000 cap has ample headroom
+    and will not truncate real records.
+
+    For the narrative ``decision`` body itself use sanitize_decision_body();
+    this cap *would* truncate it.
+    """
+    return sanitize_lesson_content(text, max_len=MAX_DECISION_LENGTH,
+                                   label="decision field")
+
+
+def sanitize_decision_body(text):
+    """Sanitize the narrative ``decision`` body without silent loss.
+
+    Decision bodies are narrative and *accrete* — amendments, corrections and
+    superseding notes are appended to an existing record rather than replacing
+    it — so they grow well past the rationale cap. Measured against a 636-row
+    decisions table, 12 rows (1.9%) already exceed MAX_DECISION_LENGTH and the
+    longest ran 32,344 chars. Capping the body at MAX_DECISION_LENGTH would
+    therefore destroy real content, which is the same failure mode the 500-char
+    lesson cap caused for session notes (Equipa task #100027).
+
+    Uses MAX_SESSION_NOTE_LENGTH: the body is narrative content of the same
+    class as a session-note summary.
+    """
+    return sanitize_lesson_content(text, max_len=MAX_SESSION_NOTE_LENGTH,
+                                   label="decision body")
+
+
 def sanitize_error_signature(sig):
     """Sanitize an error signature before using it in lesson generation.
 
@@ -189,6 +223,49 @@ def sanitize_error_signature(sig):
         return ""
     return enforce_limit(sanitize(sig), MAX_ERROR_SIGNATURE_LENGTH,
                          label="error signature")
+
+
+# --- Tool-call framing leakage ---
+# A malformed tool call can close a parameter with the FIELD's own name instead
+# of the generic closer — </decision> where </parameter> was meant. Everything
+# after that point, including the framing of every parameter that follows, then
+# lands inside the first field's value. Nothing downstream notices: the value is
+# a well-formed string, so injection-stripping passes, the length cap passes,
+# and the row is written with the later fields silently NULL.
+#
+# Measured on a live 640-row decisions table: 40 rows across 3 projects carried
+# this damage, accumulated over three weeks and several sessions. Every one had
+# rationale NULL — the field the write tool exists to capture — and some had
+# decision_type defaulted to 'general' because the intended value was inside the
+# body too. Every damaged row contained at least one literal `<parameter name=`,
+# which is what this matches.
+#
+# The marker is structural, never prose. Prose that legitimately quotes it —
+# a decision record about this very bug, say — has to escape the angle brackets
+# to be written through the tool, and the rejection message says so.
+_TOOL_CALL_FRAMING = re.compile(r'<\s*parameter\s+name\s*=', re.IGNORECASE)
+
+
+def find_tool_call_framing(text):
+    """Return the first tool-call framing marker in *text*, or None if clean.
+
+    Presence of the marker means the caller's tool call was malformed and the
+    value now carries framing that was meant to delimit it. Such a write should
+    be REFUSED rather than repaired: a loud failure gets the call retried
+    correctly, whereas a silent repair hides the caller's bug and leaves behind
+    a record nobody knows to distrust.
+
+    Args:
+        text: A raw field value. Check BEFORE sanitization — sanitize()
+            collapses runs of whitespace, which can reshape the marker.
+
+    Returns:
+        The matched marker text, or None if the value carries no framing.
+    """
+    if not text:
+        return None
+    match = _TOOL_CALL_FRAMING.search(str(text))
+    return match.group(0) if match else None
 
 
 # --- Structural validation allowlist ---
