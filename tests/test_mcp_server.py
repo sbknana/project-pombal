@@ -787,3 +787,82 @@ def test_cli_mcp_server_flag():
     import equipa.mcp_server
     assert hasattr(equipa.mcp_server, "run_server")
     assert callable(equipa.mcp_server.run_server)
+
+
+# --- MCP-08: the tools/call log line must not deadlock the server -------------
+
+def _send_request_with_deadline(proc: subprocess.Popen, method: str,
+                                params: dict, timeout: float = 15.0) -> dict | None:
+    """Send a request and read one response, giving up after *timeout*.
+
+    _send_request blocks forever on a wedged server, which turns this failure
+    into a hung suite rather than a red test. Reading on a worker thread lets the
+    deadlock be observed and reported.
+    """
+    import threading
+
+    out: dict = {}
+
+    def _read() -> None:
+        try:
+            out["line"] = proc.stdout.readline()
+        except Exception as exc:  # pragma: no cover - reader died with the pipe
+            out["error"] = repr(exc)
+
+    reader = threading.Thread(target=_read, daemon=True)
+    reader.start()
+    proc.stdin.write(json.dumps({
+        "jsonrpc": "2.0", "id": 1, "method": method, "params": params,
+    }) + "\n")
+    proc.stdin.flush()
+    reader.join(timeout=timeout)
+
+    line = out.get("line")
+    return json.loads(line) if line else None
+
+
+def test_large_tool_args_do_not_deadlock_the_server(isolated_db):
+    """A payload bigger than the stderr pipe buffer must still get a response.
+
+    The server logs every tools/call to stderr. When it logged the arguments
+    verbatim, a client holding stderr as an undrained pipe — plain
+    subprocess.PIPE, which is what this harness and most MCP clients use — gave
+    the server only the pipe's buffer before its write blocked. The response was
+    then never written to stdout and the client waited forever.
+
+    The buffer size is the whole reason this hid: measured on Windows the
+    ceiling was roughly 4 KB of arguments, while a platform with a larger pipe
+    buffer swallows the same payload and the bug never shows.
+
+    Deliberately NOT using the mcp_server fixture's helper: the point is to hold
+    stderr open and unread, exactly as a real client does.
+    """
+    proc = _spawn_server(isolated_db)
+    try:
+        response = _send_request_with_deadline(proc, "tools/call", {
+            "name": "equipa_task_create",
+            "arguments": {
+                "auth_token": TEST_TOKEN,
+                "project_id": 23,
+                "title": "large but legal",
+                # comfortably past every pipe buffer we have measured, and still
+                # under MAX_DESCRIPTION_BYTES so the call is otherwise valid
+                "description": "x" * 24_000,
+            },
+        })
+        assert response is not None, (
+            "server never responded: it is blocked writing its log line to an "
+            "undrained stderr pipe"
+        )
+        assert "result" in response, response
+    finally:
+        _stop_server(proc)
+
+
+def test_tool_call_log_line_is_capped():
+    """The log line itself is bounded, whatever the caller sends."""
+    from equipa.mcp_server import MAX_LOG_ARGS_CHARS
+
+    assert MAX_LOG_ARGS_CHARS < 4_000, (
+        "cap must stay well under the smallest observed pipe buffer (~4 KB)"
+    )
