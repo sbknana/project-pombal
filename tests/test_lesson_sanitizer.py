@@ -20,6 +20,7 @@ from lesson_sanitizer import (
     sanitize_lesson_content,
     sanitize_session_note,
     sanitize_error_signature,
+    find_tool_call_framing,
     validate_lesson_structure,
     wrap_lessons_in_task_input,
 )
@@ -392,6 +393,42 @@ def test_enforce_limit_is_loud_and_optional():
     print("PASS: enforce_limit is loud and optional")
 
 
+def test_finds_tool_call_framing():
+    """Framing leaked into a field value must be detected, and prose left alone.
+
+    A tool call that closes a parameter with the field's own name absorbs every
+    later parameter into the first field. The result is a valid string, so
+    injection-stripping and the length caps both pass it and the row is written
+    with the later fields NULL. Measured on a live 640-row decisions table, 40
+    rows across 3 projects were stored that way, every one with rationale NULL.
+    """
+    print("\n--- Test: tool-call framing detection ---")
+
+    # The exact shape observed in all 40 damaged rows: the body's closing tag
+    # carries the field's name, and the next parameter's framing follows it.
+    opener = "<" + 'parameter name="rationale">'   # split so this file is not itself a sample
+    leaked = "Adopt the Hooper reverser.</decision>\n" + opener + "Because it measures."
+    assert find_tool_call_framing(leaked) is not None, "Leaked framing not detected"
+
+    # Case and internal spacing must not be an escape hatch.
+    assert find_tool_call_framing("<" + "PARAMETER   NAME =\"x\">") is not None, \
+        "Detection is case/whitespace sensitive"
+
+    # Prose must survive: angle brackets, XML-ish talk and the word 'parameter'
+    # are all ordinary in engineering notes.
+    for clean in (
+        "",
+        None,
+        "The rim ratio is 0.31, so 1/rimRatio < 4 lb per lb of imbalance.",
+        "Pass the parameter name as a keyword argument, not positionally.",
+        "Closed the <g> element and re-ran the check.",
+    ):
+        assert find_tool_call_framing(clean) is None, f"False positive on: {clean!r}"
+
+    print("  OK: detects leaked framing, ignores prose")
+    print("PASS: tool-call framing detection")
+
+
 def run_all_tests():
     """Execute all sanitization test cases."""
     print("=" * 70)
@@ -408,6 +445,7 @@ def run_all_tests():
         test_session_note_not_truncated()
         test_sanitize_has_no_length_cap()
         test_enforce_limit_is_loud_and_optional()
+        test_finds_tool_call_framing()
         test_error_signature_sanitization()
         test_validate_lesson_structure_valid()
         test_validate_lesson_structure_invalid()
@@ -419,7 +457,7 @@ def run_all_tests():
         test_strips_code_blocks_with_dangerous_commands()
 
         print("\n" + "=" * 70)
-        print("ALL 18 TESTS PASSED")
+        print("ALL 19 TESTS PASSED")
         print("=" * 70)
         return 0
 

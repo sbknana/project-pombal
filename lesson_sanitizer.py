@@ -225,6 +225,49 @@ def sanitize_error_signature(sig):
                          label="error signature")
 
 
+# --- Tool-call framing leakage ---
+# A malformed tool call can close a parameter with the FIELD's own name instead
+# of the generic closer — </decision> where </parameter> was meant. Everything
+# after that point, including the framing of every parameter that follows, then
+# lands inside the first field's value. Nothing downstream notices: the value is
+# a well-formed string, so injection-stripping passes, the length cap passes,
+# and the row is written with the later fields silently NULL.
+#
+# Measured on a live 640-row decisions table: 40 rows across 3 projects carried
+# this damage, accumulated over three weeks and several sessions. Every one had
+# rationale NULL — the field the write tool exists to capture — and some had
+# decision_type defaulted to 'general' because the intended value was inside the
+# body too. Every damaged row contained at least one literal `<parameter name=`,
+# which is what this matches.
+#
+# The marker is structural, never prose. Prose that legitimately quotes it —
+# a decision record about this very bug, say — has to escape the angle brackets
+# to be written through the tool, and the rejection message says so.
+_TOOL_CALL_FRAMING = re.compile(r'<\s*parameter\s+name\s*=', re.IGNORECASE)
+
+
+def find_tool_call_framing(text):
+    """Return the first tool-call framing marker in *text*, or None if clean.
+
+    Presence of the marker means the caller's tool call was malformed and the
+    value now carries framing that was meant to delimit it. Such a write should
+    be REFUSED rather than repaired: a loud failure gets the call retried
+    correctly, whereas a silent repair hides the caller's bug and leaves behind
+    a record nobody knows to distrust.
+
+    Args:
+        text: A raw field value. Check BEFORE sanitization — sanitize()
+            collapses runs of whitespace, which can reshape the marker.
+
+    Returns:
+        The matched marker text, or None if the value carries no framing.
+    """
+    if not text:
+        return None
+    match = _TOOL_CALL_FRAMING.search(str(text))
+    return match.group(0) if match else None
+
+
 # --- Structural validation allowlist ---
 # Lessons must match at least one of these patterns to be considered valid.
 # This prevents arbitrary agent output from being stored as "lessons".

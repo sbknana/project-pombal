@@ -30,6 +30,13 @@ Hardening (SECURITY-REVIEW-1728, task 2452):
   measurement: topic/rationale/alternatives use sanitize_decision, while the
   narrative decision body uses sanitize_decision_body, because decision bodies
   accrete amendments and the rationale cap would silently destroy them.
+- MCP-07: all three sanitizing write-tools refuse values carrying tool-call
+  framing. A call that closes a parameter with the field's own name absorbs
+  every later parameter into the first field, and the write succeeds — the
+  value is a valid string, so sanitization and the caps both pass. Measured on
+  a live 640-row decisions table, 40 rows across 3 projects were stored that
+  way, every one with rationale NULL. The framing is structural and never
+  prose, so its presence is proof the call was malformed.
 
 Stderr is used for logging only. Stdout is reserved for JSON-RPC messages.
 
@@ -693,6 +700,42 @@ def _handle_equipa_session_notes(args: dict) -> dict:
         }
 
 
+def _reject_tool_call_framing(fields: dict) -> dict | None:
+    """Refuse a write whose field values carry tool-call framing (MCP-07).
+
+    Checked on the RAW args, before sanitization, and applied to every
+    sanitizing write-tool: the fault is in how the call was framed, not in what
+    it was trying to write, so it can land on any multi-parameter tool.
+
+    Args:
+        fields: Field name -> raw caller-supplied value.
+
+    Returns:
+        An {"error": ...} dict naming the offending field, or None if clean.
+    """
+    try:
+        from lesson_sanitizer import find_tool_call_framing
+    except Exception:  # pragma: no cover - fallback if sanitizer unavailable
+        def find_tool_call_framing(text: Any) -> str | None:
+            marker = "<parameter name="
+            return marker if text and marker in str(text).lower() else None
+
+    for name, value in fields.items():
+        marker = find_tool_call_framing(value)
+        if marker:
+            return {
+                "error": (
+                    f"{name} contains tool-call framing ({marker!r}); the call was "
+                    "malformed. A parameter was closed with a field name instead of "
+                    "</parameter>, so the parameters after it were absorbed into this "
+                    "value and would have been stored as part of it. Re-send with each "
+                    "parameter closed correctly. If the text quotes this marker on "
+                    "purpose, escape the angle brackets."
+                ),
+            }
+    return None
+
+
 def _handle_equipa_session_note_add(args: dict) -> dict:
     """Write a session note to TheForge, sanitizing narrative fields.
 
@@ -745,6 +788,14 @@ def _handle_equipa_session_note_add(args: dict) -> dict:
     except Exception:  # pragma: no cover - fallback if sanitizer unavailable
         def sanitize_session_note(text: Any) -> str:
             return ("" if not text else str(text))[:50_000]
+
+    framing = _reject_tool_call_framing({
+        "summary": args.get("summary", ""),
+        "next_steps": args.get("next_steps", ""),
+        "key_points": args.get("key_points", ""),
+    })
+    if framing:
+        return framing
 
     summary = sanitize_session_note(args.get("summary", ""))
     next_steps = sanitize_session_note(args.get("next_steps", ""))
@@ -846,6 +897,15 @@ def _handle_equipa_lesson_add(args: dict) -> dict:
 
         def sanitize_error_signature(text: Any) -> str:
             return ("" if not text else str(text))[:200]
+
+    framing = _reject_tool_call_framing({
+        "lesson": args.get("lesson", ""),
+        "role": args.get("role", ""),
+        "error_type": args.get("error_type", ""),
+        "error_signature": args.get("error_signature", ""),
+    })
+    if framing:
+        return framing
 
     lesson = sanitize_lesson_content(args.get("lesson", ""))
     if not lesson:
@@ -954,6 +1014,15 @@ def _handle_equipa_decision_add(args: dict) -> dict:
 
         def sanitize_decision_body(text: Any) -> str:
             return ("" if not text else str(text))[:50_000]
+
+    framing = _reject_tool_call_framing({
+        "topic": args.get("topic", ""),
+        "decision": args.get("decision", ""),
+        "rationale": args.get("rationale", ""),
+        "alternatives_considered": args.get("alternatives_considered", ""),
+    })
+    if framing:
+        return framing
 
     topic = sanitize_decision(args.get("topic", ""))
     decision = sanitize_decision_body(args.get("decision", ""))

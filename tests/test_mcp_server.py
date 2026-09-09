@@ -924,3 +924,94 @@ def test_sanitize_strips_base64_blobs():
     assert "reverser" in sanitize_decision_body("The reverser turns the car.")
 
 
+
+
+# --- MCP-07: tool-call framing leakage --------------------------------------
+# A malformed call closes a parameter with the field's own name instead of
+# </parameter>, so every parameter after it is absorbed into the first field's
+# value. The write used to succeed: the value is a well-formed string, so
+# injection-stripping and the length caps both pass it. Measured on a live
+# 640-row decisions table, 40 rows across 3 projects were stored that way, every
+# one with rationale NULL — the field the write tool exists to capture.
+
+def _row_count(db_path, table: str) -> int:
+    """Rows in *table* — used to prove a refused write reached no storage."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        return conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+    finally:
+        conn.close()
+
+
+def _leaked(field: str, follows: str) -> str:
+    """Build a value carrying the framing shape seen in all 40 damaged rows."""
+    return (
+        f"A real decision body.</{field}>\n"
+        # split so this file is not itself a detection sample
+        + "<" + f'parameter name="{follows}">' + "The absorbed value."
+    )
+
+
+def test_decision_add_rejects_tool_call_framing(mcp_server, isolated_db):
+    """Framing in any field is refused, and nothing reaches the table."""
+    before = _row_count(isolated_db, "decisions")
+
+    content = _decision_add(mcp_server, decision=_leaked("decision", "rationale"))
+    assert "error" in content, content
+    assert "tool-call framing" in content["error"]
+    assert "decision" in content["error"]
+
+    # every sanitized field is checked, not just the narrative body
+    assert "error" in _decision_add(mcp_server, topic=_leaked("topic", "decision"))
+    assert "error" in _decision_add(mcp_server, rationale=_leaked("rationale", "status"))
+    assert "error" in _decision_add(
+        mcp_server, alternatives_considered=_leaked("alternatives_considered", "status"))
+
+    assert _row_count(isolated_db, "decisions") == before, "a malformed call was written"
+
+
+def test_decision_add_allows_prose_mentioning_parameters(mcp_server):
+    """The guard must not block ordinary prose that talks about parameters."""
+    content = _decision_add(
+        mcp_server,
+        decision="Pass the parameter name as a keyword, not positionally.",
+        rationale="Closed the <g> element and re-ran the check.",
+    )
+    assert "error" not in content, content
+    assert content["status"] == "created"
+
+
+def test_session_note_add_rejects_tool_call_framing(mcp_server, isolated_db):
+    """The same guard covers session notes — the fault is in the call, not the table."""
+    before = _row_count(isolated_db, "session_notes")
+
+    content = _send_request(mcp_server, "tools/call", {
+        "name": "equipa_session_note_add",
+        "arguments": {
+            "auth_token": TEST_TOKEN,
+            "project_id": 23,
+            "summary": _leaked("summary", "next_steps"),
+        },
+    })
+    payload = json.loads(content["result"]["content"][0]["text"])
+    assert "error" in payload, payload
+    assert "tool-call framing" in payload["error"]
+    assert _row_count(isolated_db, "session_notes") == before
+
+
+def test_lesson_add_rejects_tool_call_framing(mcp_server, isolated_db):
+    """And lessons, which take the same multi-parameter shape."""
+    before = _row_count(isolated_db, "lessons_learned")
+
+    content = _send_request(mcp_server, "tools/call", {
+        "name": "equipa_lesson_add",
+        "arguments": {
+            "auth_token": TEST_TOKEN,
+            "project_id": 23,
+            "lesson": _leaked("lesson", "error_type"),
+        },
+    })
+    payload = json.loads(content["result"]["content"][0]["text"])
+    assert "error" in payload, payload
+    assert "tool-call framing" in payload["error"]
+    assert _row_count(isolated_db, "lessons_learned") == before
